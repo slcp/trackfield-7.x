@@ -18,7 +18,7 @@ $_trackfield_stats_presets = array(
   'time' => array(
     'label' => t('Time'),
     'op' => 'end',
-    'args' => array('time')),
+    'args' => array('seconds')),
 
   /* Altitude related  */
   'alt_change' => array(
@@ -159,7 +159,7 @@ function trackfield_stats_field_presave ($entity_type, $entity, $field, $instanc
 	 $settings = $field['settings'];
     $field_name = $settings['reference_field_name'];
     $fset = $entity->{$field_name}[$langcode];
-    
+
     foreach ($items as $delta => $item) {
     	
       if ($item['value'] != '') {

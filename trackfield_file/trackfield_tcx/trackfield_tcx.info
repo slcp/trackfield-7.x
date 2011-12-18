@@ -1,0 +1,8 @@
+name = Track TCX
+description = "Allows trackfield to interprit data in TCX (Garmin Training Centre) format."
+core = 7.x
+version = "7.x-0.5-dev"
+dependencies[] = trackfield_file
+dependencies[] = trackfield
+dependencies[] = trackfield_csv
+package = Trackfield

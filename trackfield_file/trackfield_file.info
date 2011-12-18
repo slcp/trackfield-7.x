@@ -1,0 +1,6 @@
+name = Track File
+description = "Take track data from an attached file."
+package = Trackfield
+core = 7.x
+dependencies[] = trackfield
+dependencies[] = file

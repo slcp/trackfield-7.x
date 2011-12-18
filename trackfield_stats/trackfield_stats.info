@@ -1,0 +1,8 @@
+name = Track Stats
+description = Calculate statistics from track fields.
+package = Trackfield
+core = 7.x
+dependencies[] = trackfield
+
+
+

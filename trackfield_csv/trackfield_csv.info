@@ -1,0 +1,6 @@
+name = Track CSV
+description = "Allows trackfield to interprit data in comma separated value lists."
+package = Trackfield
+core = 7.x
+dependencies[] = trackfield
+ 

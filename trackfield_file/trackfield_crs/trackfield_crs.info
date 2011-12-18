@@ -1,0 +1,8 @@
+name = Track CRS
+description = "Allows trackfield to interprit data in CRS (Garmin course) format."
+core = 7.x
+version = "7.x-0.5-dev"
+dependencies[] = trackfield
+dependencies[] = trackfield_csv
+dependencies[] = trackfield_file
+package = Trackfield

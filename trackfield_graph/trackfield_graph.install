@@ -1,0 +1,73 @@
+<?php
+
+
+/**
+ * Implementation of hook_requirements().
+ */
+ 
+ function trackfield_graph_requirements($phase) {
+  $requirements = array();
+
+var_dump(drupal_get_path('module', 'trackfield'));
+
+  if ($phase == 'install') {
+    /* Check to make sure at least one graphing library is installed in the right place */
+    $graphs_ok = array();
+    if (file_exists(drupal_get_path('module', 'trackfield') .'/jpgraph/src/jpgraph.php')) {
+      include_once(drupal_get_path('module', 'trackfield') .'/jpgraph/src/jpgraph.php');
+      if (defined('JPG_VERSION')) {
+        $graphs_ok[] = t('JpGraph server side graphing library, version %version seems to be installed.', array('%version' => JPG_VERSION));
+      }
+    }
+    if (file_exists(drupal_get_path('module', 'trackfield') . '/jqplot/jquery.jqplot.min.js')) {
+      $graphs_ok[] = t('jqPlot Javascript graphing plugin seems to be available.');
+    }
+    
+    if (count($graphs_ok) > 0) {
+      $requirements['trackfield_graph'] = array(
+        'title' => t('Trackfield Graph'),
+        'value' => join('<br/>', $graphs_ok),
+        'severity' => REQUIREMENT_OK,
+      );
+    } else {
+      $requirements['trackfield_graph'] = array(
+        'title' => t('Trackfield Graph'),
+        'value' => t('No graphing libraries/plugins appear to be installed. Please see <a href="http://drupal.org/node/274101">3rd party dependancies</a>.'),
+        'severity' => REQUIREMENT_ERROR,
+      );
+    }
+  }
+  
+  return $requirements;
+}
+
+
+function trackfield_graph_install() {
+
+  variable_set('trackfield_graph_format_sizes', array(
+    'Thumbnail' => array('width' => 133, 'height' => 100, 'margins' => array(0, 0, 0, 0),     'weight' => 1, 'axis' => 0, 'axis_font' => 2, 'legend' => 0, 'resample' => 1),
+    'default'   => array('width' => 480, 'height' => 240, 'margins' => array(40, 10, 10, 10), 'weight' => 1, 'axis' => 1, 'axis_font' => 2, 'legend' => 0, 'resample' => 1),
+    'Wide'      => array('width' => 640, 'height' => 180, 'margins' => array(0, 0, 0, 0),     'weight' => 1, 'axis' => 0, 'axis_font' => 2, 'legend' => 0, 'resample' => 1),
+    '640'       => array('width' => 640, 'height' => 320, 'margins' => array(40, 10, 10, 10), 'weight' => 2, 'axis' => 1, 'axis_font' => 2, 'legend' => 1, 'resample' => 1),
+    'Preview'   => array('width' => 800, 'height' => 600, 'margins' => array(40, 10, 10, 10), 'weight' => 3, 'axis' => 1, 'axis_font' => 2, 'legend' => 1, 'resample' => 1),
+  ));
+  
+  /* Install handy defaults for colours */
+
+  variable_set('trackfield_graph_format_cols', array(
+    'background' => array('col' => '#ffffff'),
+    'axis'       => array('col' => '#000000'),
+    'altitude'   => array('col' => '#00c000@0.5', 'fill_col' => '#00c000@0.95'),
+    'heartrate'  => array('col' => '#c00000@0.5', 'fill_col' => '#c00000@0.95'),
+  ));
+  
+  }
+  
+function trackfield_graph_uninstall() {
+	  
+  variable_del('trackfield_graph_format_cols');
+  variable_del('trackfield_graph_format_sizes');
+  variable_del('trackfield_graph_multiple_fill_threshold');
+  variable_del('trackfield_graph_ttf_path');
+  
+  }

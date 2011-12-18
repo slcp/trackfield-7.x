@@ -1,0 +1,729 @@
+<?php
+
+/*
+ * Types of statistic we understand.
+ * Array of:
+ *  value stored in DB => display value
+ */
+
+global $_trackfield_stats_presets;
+$_trackfield_stats_presets = array(
+  /* Distance related */
+  'distance' => array(
+    'label' => t('Distance'),
+    'op' => 'end',
+    'args' => array('distance')),
+    
+  /* Time related */
+  'time' => array(
+    'label' => t('Time'),
+    'op' => 'end',
+    'args' => array('time')),
+
+  /* Altitude related  */
+  'alt_change' => array(
+    'label' => t('Altitude Change (overall)'),
+    'op' => 'change',
+    'args' => array('altitude')),
+  'alt_range' => array(
+    'label' => t('Altitude Range (overall)'),
+    'op' => 'range',
+    'args' => array('altitude')),
+  'alt_min' => array(
+    'label' => t('Altitude (min)'),
+    'op' => 'min',
+    'args' => array('altitude')),
+  'alt_max' => array(
+    'label' => t('Altitude (max)'),
+    'op' => 'max',
+    'args' => array('altitude')),
+  'alt_start' => array(
+    'label' => t('Altitude (start)'),
+    'op' => 'start',
+    'args' => array('altitude')),
+  'alt_end' => array(
+    'label' => t('Altitude (end)'),
+    'op' => 'end',
+    'args' => array('altitude')),
+  'alt_climb' => array(
+    'label' => t('Altitude Climb'),
+    'op' => 'cumulative_rise',
+    'args' => array('altitude', 0.25)),
+  'alt_descent' => array(
+    'label' => t('Altitude Descent'),
+    'op' => 'cumulative_fall',
+    'args' => array('altitude', 0.25)),
+
+  'grade' => array(
+    'label' => t('Gradient (overall)'),
+    'op' => 'grade_avg',
+    'args' => array('distance', 'altitude')),
+  'grade_max' => array(
+    'label' => t('Gradient (min)'),
+    'op' => 'grade_min',
+    'args' => array('distance', 'altitude', 2)),
+  'grade_min' => array(
+    'label' => t('Gradient (max)'),
+    'op' => 'grade_max',
+    'args' => array('distance', 'altitude', 2)),
+
+  'dst_climb' => array(
+    'label' => t('Distance Climb'),
+    'op' => 'on_rise',
+    'args' => array('distance', 'altitude', 0.25)),
+  'dst_descent' => array(
+    'label' => t('Distance Descent'),
+    'op' => 'on_fall',
+    'args' => array('distance', 'altitude', 0.25)),
+  'dst_flat' => array(
+    'label' => t('Distance Flat'),
+    'op' => 'on_flat',
+    'args' => array('distance', 'altitude', 0.25)),
+
+);
+
+global $_trackfield_stats_op_types;
+$_trackfield_stats_op_types = array(
+  'min' => array('args' => 1),
+  'max' => array('args' => 1),
+  'start' => array('args' => 1),
+  'end' => array('args' => 1),
+  'change' => array('args' => 1),
+  'range' => array('args' => 1),
+  'cumulative_rise' => array('args' => 2),
+  'cumulative_fall' => array('args' => 2),
+  'on_rise' => array('args' => 3),
+  'on_fall' => array('args' => 3),
+  'on_flat' => array('args' => 3),
+
+  'grade_avg' => array('args' => 2),
+  'grade_min' => array('args' => 2),
+  'grade_max' => array('args' => 2),
+);
+
+
+/***************************************************************
+ * Field Type API hooks
+ ***************************************************************/
+
+/**
+ * Implements hook_field_info().
+ *
+ * Provides the description of the field.
+ */
+function trackfield_stats_field_info() {
+  return array(
+    'trackstat' => array(
+      'label' => t('Track Stat'),
+      'description' => t('Displays stats based on the data collect by Track field.'),
+      'default_widget' => 'trackfield_stat_text',
+      'default_formatter' => 'trackfield_stats_default',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_delete().
+ */
+function trackfield_stats_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
+	  }
+
+/**
+ * Implements hook_field_validate().
+ */
+function trackfield_stats_field_validate ($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+	 /*
+     * TODO: make detection of input validation more useful.
+     */	 
+	 if (is_array($items)) {
+      foreach ($items as $delta => $item) {
+        if ($item['value'] != '') {
+          /* TODO: make this test more generic */
+          if (_trackfield_stats_is_time($field)) {
+            if (_trackfield_stats_txt2secs($item['value']) < 1) {
+              $errors[$field['field_name']][$langcode][$delta][] = array('error' => 'error_error', 'message' => 'Field ' . t($instance['widget']['label']) . ': Not a valid time.');
+            }
+          ;}
+        ;}
+      }
+    ;}	
+	 }
+
+/**
+ * Implements hook_field_presave().
+ */
+function trackfield_stats_field_presave ($entity_type, $entity, $field, $instance, $langcode, &$items, &$errors) {
+	/*
+     * Calculate stat if no input was given and that is possible.
+     */ 
+	 $settings = $field['settings'];
+    $field_name = $settings['reference_field_name'];
+    $fset = $entity->{$field_name}[$langcode];
+    
+    foreach ($items as $delta => $item) {
+    	
+      if ($item['value'] != '') {
+        /* It was entered - take users value */
+        /* TODO: make this test more generic */
+        if (_trackfield_stats_is_time($field)) {
+          $items[$delta]['value'] = _trackfield_stats_txt2secs($items[$delta]['value']);
+        }
+        $items[$delta]['is_manual'] = 1;
+      } else if ($fset[$delta]['value'] != '') {
+        /* Get op/args from preset if necessary */
+        if (array_key_exists('stat_preset', $settings)) {
+          global $_trackfield_stats_presets;
+          $op = $_trackfield_stats_presets[$settings['stat_preset']]['op'];
+          $args = $_trackfield_stats_presets[$settings['stat_preset']]['args'];
+        } else {
+          $op = $settings['stat_op'];
+          $args = explode(',', $settings['stat_args']);
+        }
+
+        /* If we have to normalise  - set norm_factor */
+        $norm_factor = 1;
+        $fset_attr = unserialize($fset[$delta]['attributes']);
+        if ($settings['normalise'] == TRACKFIELD_NORM_REVERSE ||
+            ($settings['normalise'] == TRACKFIELD_NORM_AS_CLIMB && in_array('altitude', $args) && !$fset_attr['is_climb']) ||
+            ($settings['normalise'] == TRACKFIELD_NORM_AS_DESCENT && in_array('altitude', $args) && $fset_attr['is_climb'])) {
+          _trackfield_stats_reverse_op($op, $norm_factor);
+        }
+
+        /* Calculate it */
+        switch ($op) {
+        case 'min':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $items[$delta]['value'] = min($fset[$delta][$args[0]]);
+          }
+          break;
+          
+        case 'max':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $items[$delta]['value'] = max($fset[$delta][$args[0]]);
+          }
+          break;
+
+        case 'start':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $items[$delta]['value'] = $fset[$delta][$args[0]][0];
+          }
+          break;
+
+        case 'end':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $items[$delta]['value'] = $fset[$delta][$args[0]][count($fset[$delta][$args[0]]) - 1];
+          }
+          break;
+
+        case 'change':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $items[$delta]['value'] =
+              $fset[$delta][$args[0]][count($fset[$delta][$args[0]]) - 1] -
+              $fset[$delta][$args[0]][0];
+          }
+          break;
+
+        case 'range':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $items[$delta]['value'] =
+              max($fset[$delta][$args[0]]) - min($fset[$delta][$args[0]]);
+          }
+          break;
+
+        case 'cumulative_rise':
+        case 'cumulative_fall':
+          if (array_key_exists($args[0], $fset[$delta])) {
+            $yset = $fset[$delta][$args[0]];
+            if (count($args) > 1) {
+              $min_change = $args[1];
+            } else {
+              $min_change = 0;
+            }
+
+            $aa = $yset[0];
+            $a_climb = 0; $a_descent = 0;
+            for ($lp = 1; $lp < count($yset); $lp++) {
+              $ab = $yset[$lp];
+              if (abs($ab - $aa) > $min_change) {
+                if ($ab > $aa) {
+                  $a_climb += ($ab - $aa);
+                } else {
+                  $a_descent += ($ab - $aa);
+                }
+                $aa = $ab;
+              }
+            }
+            switch ($op) {
+            case 'cumulative_rise':
+              $items[$delta]['value'] = $a_climb;
+              break;
+            case 'cumulative_fall':
+              $items[$delta]['value'] = $a_descent;
+              break;
+            }
+          }
+          break;
+
+        case 'on_rise':
+        case 'on_fall':
+        case 'on_flat':
+          if (array_key_exists($args[0], $fset[$delta]) &&
+              array_key_exists($args[1], $fset[$delta])) {
+            $xset = $fset[$delta][$args[0]];
+            $yset = $fset[$delta][$args[1]];
+            if (count($args) > 2) {
+              $min_change = $args[2];
+            } else {
+              $min_change = 0;
+            }
+
+            $da = $xset[0]; $dl = $da;
+            $aa = $yset[0];
+            $d_climb = 0; $d_descent = 0; $d_flat = 0;
+            for ($lp = 1; $lp < count($xset); $lp++) {
+              $db = $xset[$lp];
+              $ab = $yset[$lp];
+              if (abs($ab - $aa) > $min_change) {
+                /* Amount between $da and $dl considered to not be flat */
+                $d_flat += $dl - $da;
+                if ($ab > $aa) {
+                  $a_climb += ($ab - $aa);
+                  $d_climb += ($db - $dl);
+                } else {
+                  $a_descent += ($ab - $aa);
+                  $d_descent += ($db - $dl);
+                }
+                $da = $db; $aa = $ab;
+              }
+              $dl = $db;
+            }
+            switch ($op) {
+            case 'on_rise':
+              $items[$delta]['value'] = $d_climb;
+              break;
+            case 'on_fall':
+              $items[$delta]['value'] = $d_descent;
+              break;
+            case 'on_flat':
+              $items[$delta]['value'] = $d_flat;
+              break;
+            }
+          }
+          break;
+
+        case 'grade_avg':
+          if (array_key_exists($args[0], $fset[$delta]) &&
+              array_key_exists($args[1], $fset[$delta])) {
+            $xset = $fset[$delta][$args[0]];
+            $yset = $fset[$delta][$args[1]];
+            $dx = $xset[count($xset) - 1] - $xset[0];
+            $dy = $yset[count($yset) - 1] - $yset[0];
+            $items[$delta]['value'] = ($dy / $dx) * 100;
+          }
+          break;
+
+        /*
+         * Work out grade min/max with the same code for (sort of)
+         * neatness.
+         */
+        case 'grade_max':
+        case 'grade_min':
+          if (array_key_exists($args[0], $fset[$delta]) &&
+              array_key_exists($args[1], $fset[$delta])) {
+            $xset = $fset[$delta][$args[0]];
+            $yset = $fset[$delta][$args[1]];
+            if (count($args) > 2) {
+              $min_change = $args[2];
+            } else {
+              $min_change = 0;
+            }
+
+            $da = $xset[0];
+            $aa = $yset[0];
+            $g_max = -100; $g_min = 100;
+            for ($lp = 1; $lp < count($xset); $lp++) {
+              $db = $xset[$lp];
+              $ab = $yset[$lp];
+              if ($db - $da > $min_change) {
+                $ga = (($ab - $aa) / ($db - $da)) * 100;
+                if ($ga > $g_max) { $g_max = $ga; }
+                if ($ga < $g_min) { $g_min = $ga; }
+                $da = $db; $aa = $ab;
+              }
+            }
+            switch ($op) {
+            case 'grade_max':
+              $items[$delta]['value'] = $g_max;
+              break;
+            case 'grade_min':
+              $items[$delta]['value'] = $g_min;
+              break;
+            }
+          }
+          break;
+        }
+
+        $items[$delta]['value'] *= $norm_factor;
+        $items[$delta]['is_manual'] = 0;
+      }
+    }
+      }
+
+/**
+ * Implements hook_field_update().
+ */
+function trackfield_stats_field_update($entity_type, $entity, $field, $instance, $langcode, &$items) {
+    }
+
+/**
+ * Implements hook_field_insert().
+ */
+function trackfield_stats_field_insert($entity_type, $entity, $field, $instance, $langcode, &$items) {
+    
+     }
+
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function trackfield_stats_field_is_empty($item, $field) {
+  return FALSE;
+}
+
+/**
+ * Implementation of hook_field_settings_form().
+ */
+function trackfield_stats_field_settings_form($field, $instance, $has_data) {
+  
+	 	$settings = $field['settings'];
+
+      global $_trackfield_stats_presets;
+      global $_trackfield_stats_op_types;
+      global $_trackfield_norm_types;
+      $presets = array('' => '<none>');
+      foreach ($_trackfield_stats_presets as $key => $value) {
+        $presets[$key] = t($value['label']);
+      }
+        
+      $form = array(
+        'reference_field_name' => array(
+          '#type' => 'textfield',
+          '#rows' => 1,
+          '#title' => t('Reference Field Name'),
+          '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
+          '#required' => true,
+        ),
+        'stat_preset' => array(
+          '#type' => 'select',
+          '#title' => t('Preset Statistic'),
+          '#default_value' => isset($settings['stat_preset']) ? $settings['stat_preset'] : '',
+          '#options' => $presets,
+        ),
+        'stat_op' => array(
+          '#type' => 'select',
+          '#title' => t('Statistic Operation'),
+          '#default_value' => isset($settings['stat_op']) ? $settings['stat_op'] : '',
+          '#options' => array_merge(array('' => t('<none>')), array_keys($_trackfield_stats_op_types)),
+        ),
+        'stat_args' => array(
+          '#type' => 'textfield',
+          '#title' => t('Operation Args'),
+          '#default_value' => isset($settings['stat_args']) ? $settings['stat_args'] : '',
+        ),
+        'normalise' => array(
+          '#type' => 'select',
+          '#title' => t('Normalise As'),
+          '#default_value' => isset($settings['normalise']) ? $settings['normalise'] : '',
+          '#options' => $_trackfield_norm_types,
+        )
+      );
+      
+      $form['#element_validate'] = array('trackfield_stats_settings_form_validate');
+      
+      return $form;
+  }
+  
+function trackfield_stats_settings_form_validate($element, &$form_state) {
+
+	$valid_fields = array();
+	 if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
+        if (array_count_values($valid_fields) == 0) {
+          form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
+        } else {
+          form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
+        }
+      }
+      if ($element['stat_op']['#value'] != '' && $element['stat_preset']['#value'] != '') {
+        form_set_error('stat_preset', t('Preset is not required if giving operation & atgs.'));
+      }
+      if ($element['stat_op']['#value'] == '' && $element['stat_preset']['#value'] == '') {
+        form_set_error('stat_op', t('You must specify operation if not using a preset.'));
+      }
+      if ($element['stat_op']['#value'] != '' && $element['stat_args']['#value'] == '') {
+        form_set_error('stat_op', t('You must specify args with operation.'));
+      }
+      /* TODO: check args number */
+    }
+
+
+
+/***********************************************************************
+ *  Field Type API: Formatter
+ *
+ *  These are the api hooks that present formatted (themed) output to the
+ *  user.
+ **********************************************************************/
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function trackfield_stats_field_formatter_info() {
+global $_trackfield_norm_types;
+
+  $formatters = array(
+    'trackfield_stats_default' => array('label' => t('Default'), 'field types' => array('trackstat')),
+    'trackfield_stats_metric' => array('label' => t('Metric - Auto'), 'field types' => array('trackstat')),
+    'trackfield_stats_m' => array('label' => t('9999m'), 'field types' => array('trackstat')),
+    'trackfield_stats_km' => array('label' => t('9.99Km'), 'field types' => array('trackstat')),
+    'trackfield_stats_pct' => array('label' => t('9.9%'), 'field types' => array('trackstat')),
+    'trackfield_stats_hh:mm:ss' => array('label' => t('hh:mm:ss'), 'field types' => array('trackstat')),
+    'trackfield_stats_99h99m99s' => array('label' => t('99h99m99s'), 'field types' => array('trackstat')),
+  );
+  return $formatters;  
+
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function trackfield_stats_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+ $element = array();  
+  
+  foreach($items as $delta => $item) {
+  $value = isset($item['value']) ? check_plain($item['value']) : NULL;
+  switch($display['type']) {
+  	  
+    case 'trackfield_stats_metric':
+    if ($value >= TRACKFIELD_METRIC_M_MAX) {
+      $element[$delta]['#markup'] = sprintf("%0.2fKm", $value / 1000);
+      return $element;
+    }
+    $element[$delta]['#markup'] = sprintf("%dm", $value);
+    return $element;
+
+    case 'trackfield_stats_m':
+    $element[$delta]['#markup'] = sprintf("%dm", $value);
+    return $element;
+
+    case 'trackfield_stats_km':
+    $element[$delta]['#markup'] = sprintf("%0.2fKm", $value / 1000);
+    return $element;
+
+    case 'trackfield_stats_pct':
+    $element[$delta]['#markup'] = sprintf("%0.1f%%", $value);
+    return $element;
+
+    case 'trackfield_stats_hh:mm:ss':
+    if ($value > 0) {
+      $element[$delta]['#markup'] = _trackfield_stats_secs2text($value);
+      return $element;
+    } else {
+      $element[$delta]['#markup'] = '';
+      return $element;
+    }
+
+    case 'trackfield_stats_99h99m99s':
+    if ($value > 0) {
+      $element[$delta]['#markup'] = sprintf("%02dh%02dm%02ds", $value / 3600, ($value % 3600) / 60, $value % 60);
+      return $element;
+    } else {
+      $element[$delta]['#markup'] = '';
+      return $element;
+    }
+
+    case 'trackfield_stats_default':
+    default:
+    $element[$delta]['#markup'] = $value;
+    return $element;
+  }
+  }
+  }
+
+
+/**************************************************************************
+ * Field Type API: Widget
+ *
+ * The widget is the form element used to receive input from the user
+ * when the field is being populated.
+ **************************************************************************/
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function trackfield_stats_field_widget_info() {
+  return array(
+    'trackfield_stat_text' => array(
+      'label' => t('Text Field'),
+      'field types' => array('trackstat'),
+    ),	
+  );
+}
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function trackfield_stats_field_widget_settings_form($field, $instance) {
+}
+
+/*
+ * Function to determine if given field should be formatted as time.
+ */
+
+function _trackfield_stats_is_time($field) {
+  return ($field['settings']['stat_preset'] == 'time');
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+ 
+function trackfield_stats_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  global $_trackfield_stats_presets;
+	$default_value = isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL; 
+  
+  /*
+   * Only show user stats they have previously entered (manual ones).
+   * Otherwise calculated stats will not be refresed if the source track changes.
+   */
+  switch ($instance['widget']['type']) {
+
+    case 'trackfield_stat_text':
+  
+  if (isset($items[$delta])) { 
+  if (array_key_exists('is_manual', $items[$delta])) {
+  if ($items[$delta]['is_manual'] == 1) {
+    if (isset($items[$delta]['value'])) {
+      $default_value = $items[$delta]['value'];
+      if (_trackfield_stats_is_time($field)) {
+        $default_value = _trackfield_stats_secs2text($default_value);
+      }
+    }
+    } else {
+      /* Blank out stat to allow re-calc if necessary */
+      $default_value = NULL;
+  }
+  };
+  }
+
+  $element['value'] = array(
+    '#type' => 'textfield',
+	 '#title' => t($_trackfield_stats_presets[$field['settings']['stat_preset']]['label']),
+    '#default_value' => $default_value,
+    );
+    
+  $element['is_manual'] = array();
+  
+  break; 
+  }
+  /*if (!empty($field['text_processing'])) {
+    $filter_key = $element['#columns'][1];
+    $format = isset($element['#value'][$filter_key]) ? $element['#value'][$filter_key] : FILTER_FORMAT_DEFAULT;
+    $parents = array_merge($element['#parents'] , array($filter_key));
+    $element[$filter_key] = filter_form($format, 1, $parents);
+  }
+
+  // Used so that hook_field('validate') knows where to flag an error.
+  $element['_error_element'] = array(
+    '#type' => 'value',
+    '#value' => implode('][', array_merge($element['#parents'], array($field_key))),
+  );*/
+  
+ 
+
+  return $element;
+
+}
+
+/**
+ * Implements hook_field_widget_error().
+ *//*
+function trackfield_field_widget_error($element, $error, $form, &$form_state) {
+  foreach($error as $error) {
+    form_error($element, $error['message']);
+  }
+}*/
+
+function _trackfield_stats_secs2text($secs) {
+  return sprintf("%02d:%02d:%02d", $secs / 3600, ($secs % 3600) / 60, $secs % 60);
+}
+
+function _trackfield_stats_reverse_op(&$op, &$norm_factor) {
+  switch ($op) {
+    case 'min':
+    case 'max':
+    case 'range':
+    case 'on_flat':
+      $norm_factor = 1;
+      break;
+
+    case 'start':
+      $op = 'end';
+      $norm_factor = 1;
+      break;
+
+    case 'end':
+      $op = 'start';
+      $norm_factor = 1;
+      break;
+
+    case 'change':
+      $norm_factor = -1;
+      break;
+
+    case 'cumulative_rise':
+      $op = 'cumulative_fall';
+      $norm_factor = -1;
+      break;
+
+    case 'cumulative_fall':
+      $op = 'cumulative_rise';
+      $norm_factor = -1;
+      break;
+
+    case 'on_rise':
+      $op = 'on_fall';
+      $norm_factor = -1;
+      break;
+
+    case 'on_fall':
+      $op = 'on_fall';
+      $norm_factor = -1;
+      break;
+
+    case 'grade_avg':
+      $norm_factor = -1;
+      break;
+
+    case 'grade_min':
+      $op = 'grade_max';
+      $norm_factor = -1;
+      break;
+
+    case 'grade_max':
+      $op = 'grade_min';
+      $norm_factor = -1;
+      break;
+  }
+}
+
+/*
+ * Function to determine if the input string is a time.
+ */
+
+function _trackfield_stats_txt2secs($time) {
+  if (is_numeric($time)) { return $time; }
+  if (preg_match_all('/([0-9]+):([0-9][0-9]):([0-9][0-9])/', $time, $parts, PREG_SET_ORDER) == 1) {
+    return $parts[0][1] * 3600 + $parts[0][2] * 60 + $parts[0][3]; 
+  }
+  return 0;
+}

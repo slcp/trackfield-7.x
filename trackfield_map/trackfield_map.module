@@ -1,0 +1,480 @@
+<?php
+
+DEFINE('TRACKFIELD_MAP_PPLD_MAX', 46848);
+DEFINE('TRACKFIELD_MAP_ZOOM_MAX', 16);
+
+/* TODO: Make this configurable, with gmap controls attributes */
+
+global $trackfield_map_format_sizes;
+$trackfield_map_format_sizes = array(
+  'Thumbnail' => array('width' => 133, 'height' => 100, 'type' => 'gmap_static', 'gmap_attr' => '|control=None |type=Map'),
+  'Default' => array('width' => 480, 'height' => 360, 'type' => 'gmap', 'gmap_attr' => '|control=Small |type=Map'),
+  '640'  => array('width' => 640, 'height' => 480, 'type' => 'gmap', 'gmap_attr' => '|control=Small |type=Map'),
+  'Preview' => array('width' => 800, 'height' => 600, 'type' => 'gmap', 'gmap_attr' => '|control=Small |type=Map'),
+);
+global $trackfield_map_type_max_path_len;
+$trackfield_map_type_max_path_len = array(
+  'gmap' => 500,
+  'gmap_static' => 50
+);
+
+/*
+ * Implementation of hook_menu().
+ */
+
+function trackfield_map_menu() {
+  $items = array();
+
+  /* Admin menu */
+  $access = user_access('administer trackfield');
+  $items['admin/settings/trackfield/map'] = array(
+    'type' => MENU_LOCAL_TASK,
+    'title' => t('Maps'),
+    'description' => t('Settings for trackfield maps.'),
+    'access arguments' => array('administer trackfield'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_trackfield_map_admin'));
+
+  return $items;
+}
+
+/***************************************************************
+ * Field Type API hooks
+ ***************************************************************/
+
+/**
+ * Implements hook_field_info().
+ *
+ * Provides the description of the field.
+ */
+function trackfield_map_field_info() {
+  return array(
+    'trackmap' => array(
+      'label' => t('Track Map'),
+      'default_widget' => 'trackfield_map_none',
+      'default_formatter' => 'trackfield_map_default',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function trackfield_map_field_is_empty($item, $field) {
+  return FALSE;
+}
+
+/**
+ * Implementation of hook_field_settings_form().
+ * This is identical to the trackfield_graph hook.
+ */
+function trackfield_map_field_settings_form($field, $instance, $has_data) {
+  
+	 	$settings = $field['settings'];
+	 	
+		$form['reference_field_name'] = array(
+          '#type' => 'textfield',
+          '#rows' => 1,
+          '#title' => t('Reference Field Name'),
+          '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
+          '#required' => true,
+          );
+
+      $form['#element_validate'] = array('trackfield_map_settings_form_validate');
+          
+  return $form;
+  }
+  
+function trackfield_map_settings_form_validate($element, &$form_state) {
+	
+	$valid_fields = array();
+	 if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
+        if (array_count_values($valid_fields) == 0) {
+          form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
+        } else {
+          form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
+        }
+      }
+  }
+
+
+/**************************************************************************
+ * Field Type API: Widget
+ *
+ * The widget is the form element used to receive input from the user
+ * when the field is being populated.
+ **************************************************************************/
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function trackfield_map_field_widget_info() {
+  return array(
+    'trackfield_map_none' => array(
+      'label' => t('None Required'),
+      'field types' => array('trackmap'),
+    ),	
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+ 
+function trackfield_map_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+switch ($instance['widget']['type']) {
+	
+	 /* Is this necessary? */
+	 /*
+     * If we don't return at least a blank array then this field
+     * will not appear in the 'manage fields' tab inside content.
+     */
+    case 'trackfield_map_none':
+      $element['value'] = array(
+        '#type' => 'hidden',	
+        '#title' => 'Map Placeholder...',
+        '#required' => FALSE,
+        '#default_value' => NULL,	
+      );
+      break;
+
+  }
+  return $element;
+
+
+}
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function trackfield_map_field_widget_settings_form($field, $instance) {  	
+}
+
+/***********************************************************************
+ *  Field Type API: Formatter
+ *
+ *  These are the api hooks that present formatted (themed) output to the
+ *  user.
+ **********************************************************************/
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function trackfield_map_field_formatter_info() {
+  $formatters = array();
+  $trackfield_map_format_sizes = variable_get('trackfield_map_format_sizes', array());
+  foreach (array_keys($trackfield_map_format_sizes) as $formatter) {
+    $formatters['trackfield_map_' . $formatter] = array('label' => $formatter, 'field types' => array('trackmap'));
+  }
+
+  return $formatters;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function trackfield_map_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  $formatter = substr($display['type'], strlen('trackfield_map_'));
+  $out = '';
+  $trackfield_map_format_sizes = variable_get('trackfield_map_format_sizes', array());
+  $ref_field_name = $field['settings']['reference_field_name'];
+  
+  foreach (array_keys($trackfield_map_format_sizes) as $fcheck) {    
+    if ($fcheck == $formatter) {
+    	
+		foreach ($items as $delta => $field) {     	
+    	/*
+       * Found the correct size - get lat/lon data and draw map.
+       */
+     	/*if (isset($entity->in_preview)) {
+				/*
+				 * If this is a preview then the datasets should already be in
+				 * the node. Just use that.
+				 */
+				/*$ref_field = $entity->$ref_field_name;
+				$item = $ref_field[$langcode][$delta];
+			} else {*/
+				/*
+				 * This isn't a preview.
+				 * The datasets will not have automatically been loaded (for performance reasons),
+				 * so load them now.
+				 */
+        $result = db_query("SELECT nid, settype, setdata from {trackfield_datasets} WHERE vid = :vid and field_name = :fd and delta = :delta and settype in ('latitude', 'longitude')", array(':vid' => $entity->vid, ':fd' => $ref_field_name, ':delta' =>$delta));
+        foreach ($result as $sd) {
+          $item[$sd->settype] = explode(',', $sd->setdata);
+        	}
+        //}
+
+      /* Should we be showing a map too? */
+      if (isset($item) && array_key_exists('latitude', $item) && array_key_exists('longitude', $item)) {
+        $points = count($item['latitude']);
+        /* Markers for start/finish */
+        $markers = sprintf(" |markers=route::%f,%f + %f,%f",
+          $item['latitude'][0], $item['longitude'][0],
+          $item['latitude'][$points - 1], $item['longitude'][$points - 1]);
+
+        /* Find bounds of lat/lon for map */
+        $lat_min = 90; $lat_max = -90;
+        $lon_min = 180; $lon_max = -180;
+        for ($lp = 0; $lp < $points; $lp++) {
+          if ($item['latitude'][$lp] < $lat_min) { $lat_min = $item['latitude'][$lp]; }
+          if ($item['latitude'][$lp] > $lat_max) { $lat_max = $item['latitude'][$lp]; }
+          if ($item['longitude'][$lp] < $lon_min) { $lon_min = $item['longitude'][$lp]; }
+          if ($item['longitude'][$lp] > $lon_max) { $lon_max = $item['longitude'][$lp]; }
+        }
+        
+        /* Figure out zoom */
+        $gmap_width = $trackfield_map_format_sizes[$formatter]['width'];
+        $gmap_height = $trackfield_map_format_sizes[$formatter]['height'];
+        $lon_degs = $lon_max - $lon_min;
+        $lat_degs = $lat_max - $lat_min;
+        $pixelsPerLonDegree = TRACKFIELD_MAP_PPLD_MAX;
+        $zoom = TRACKFIELD_MAP_ZOOM_MAX;
+        while ($zoom > 1) {
+          /* TODO: handle lat properly */
+          if ($lon_degs * $pixelsPerLonDegree < $gmap_width &&
+              $lat_degs * $pixelsPerLonDegree < $gmap_height) break;
+
+          $zoom--;
+          $pixelsPerLonDegree /= 2;
+        }
+        $map_centre = sprintf('%f,%f',  $lat_min + ($lat_max - $lat_min) / 2, $lon_min + ($lon_max - $lon_min) / 2);
+
+        /* Too many points is bad, remove redundant ones */
+        global $trackfield_map_type_max_path_len;
+        $max_path_len = $trackfield_map_type_max_path_len[$trackfield_map_format_sizes[$formatter]['type']];
+        if ($points > $max_path_len) {
+          _trackfield_map_optimise_for_gmap($item, $lat_max - $lat_min, $lon_max - $lon_min,  $gmap_width, $gmap_height, $max_path_len);
+        }
+        $line_points = array();
+        for ($lp = 0; $lp < count($item['latitude']); $lp++) {
+          /* 5DP is 1m accuracy at equator */
+          $line_points[] = sprintf("%.5f,%.5f", $item['latitude'][$lp], $item['longitude'][$lp]);
+        }
+
+        /* TODO: these should be attributes of formatter */
+        $path_colour = '0000bb';
+        $path_width = 2;
+        $path_opacity = 50;
+
+        if ($trackfield_map_format_sizes[$formatter]['type'] == 'gmap_static') {
+          $path = sprintf('&path=rgb:0x%s,weight:%d|%s',
+            $path_colour,
+            $path_width,
+            join('|', $line_points));
+          $static_src = sprintf('http://maps.google.com/staticmap?zoom=%d&center=%s&size=%dx%d%s&key=%s',
+            $zoom,
+            $map_centre,
+            $gmap_width, $gmap_height,
+            $path,
+            variable_get('googlemap_api_key', ''));
+          $out .= sprintf('<img src="%s" alt="map" title="map" width="%d" height="%d"/>',
+            $static_src,
+            $gmap_width, $gmap_height);
+        } else {
+          /* Default is gmap embedded */
+          $path = sprintf(' |line=#%s/%d/%d:%s', $path_colour, $path_width, $path_opacity, join(' + ', $line_points));
+          $gmap = sprintf('[gmap zoom=%d |center=%s |width=%dpx |height=%dpx |id=%s %s%s%s]',
+            $zoom,
+            $map_centre,
+            $gmap_width, $gmap_height,
+            "trackfield_map_" . $entity->nid . "_$formatter",
+            $trackfield_map_format_sizes[$formatter]['gmap_attr'],
+            $path,
+            $markers);
+            
+         _gmap_doheader();   
+      	$out = _gmap_filter_process($gmap, NULL, NULL);	
+         }
+         
+         $element[$delta]['#markup'] = $out;
+         
+        } 
+       }
+      }
+    
+    }
+
+  return $element;
+}
+
+function _trackfield_map_admin() {
+  $trackfield_format_sizes = variable_get('trackfield_map_format_sizes', array());
+  /* Add a blank line for new entries */
+  $trackfield_format_sizes[''] = array();
+  
+  $form['sizes'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Map sizes'),
+    '#tree' => TRUE,
+    '#theme' => 'trackfield_map_sizes_form',
+    '#description' => t('Various size mapping options are available whenever these are shown (in teaser, full node, views, etc). Define the possible choices required here.')
+  );
+
+  $lp = 0;
+  foreach ($trackfield_format_sizes as $key => $config) {
+    $form['sizes'][$lp]['del'] = array(
+      '#type' => 'checkbox',
+    );
+    $form['sizes'][$lp]['label'] = array(
+      '#type' => 'textfield',
+      '#default_value' => $key,
+      '#size' => 15,
+      '#maxlength' => 32,
+    );
+    $form['sizes'][$lp]['width'] = array(
+      '#type' => 'textfield',
+      '#default_value' => $config ? $config['width'] : '',
+      '#size' => 4,
+      '#maxlength' => 5,
+    );
+    $form['sizes'][$lp]['height'] = array(
+      '#type' => 'textfield',
+      '#default_value' => $config ? $config['height'] : '',
+      '#size' => 4,
+      '#maxlength' => 5,
+    );
+    $form['sizes'][$lp]['type'] = array(
+      '#type' => 'select',
+      '#default_value' => $config ? $config['type'] : 'gmap',
+      '#options' => array('gmap_static' => 'gmap_static', 'gmap' => 'gmap'),
+    );
+    $form['sizes'][$lp]['gmap_attr'] = array(
+      '#type' => 'textfield',
+      '#default_value' => $config ? $config['gmap_attr'] : '',
+      '#size' => 32,
+      '#maxlength' => 128,
+    );
+    $lp++;
+  }
+  
+  $form['buttons']['submit'] = array('#type' => 'submit', '#value' => t('Save configuration') );
+  $form['buttons']['delete'] = array('#type' => 'submit', '#value' => t('Delete Selected'));
+  $form['#submit'] = array('trackfield_map_sizes_submit');
+  $form['#validate'] = array('trackfield_map_sizes_validate');
+
+  return $form;
+}
+
+function trackfield_map_theme() {
+    return array(
+      'trackfield_map_sizes_form' => array(
+        'render element' => 'element',
+      ),
+    );
+}
+
+function theme_trackfield_map_sizes_form($element) {
+  $header = array(t('Del'), t('Label'), t('Width'), t('Height'), t('Type'), t('Attributes'));
+  $element = $element['element'];  
+  
+  foreach (element_children($element) as $key) {
+    $row = array();
+    $row[] = drupal_render($element[$key]['del']);
+    $row[] = drupal_render($element[$key]['label']);
+    $row[] = drupal_render($element[$key]['width']);
+    $row[] = drupal_render($element[$key]['height']);
+    $row[] = drupal_render($element[$key]['type']);
+    $row[] = drupal_render($element[$key]['gmap_attr']);
+    $rows[] = $row;
+  }
+  
+  $output = '';
+  $output .= theme('table', array('header' => $header, 'rows' => $rows));
+  
+  return $output;
+}
+
+function trackfield_map_sizes_validate($form, &$form_state) {
+  /* Don't bother if just deleting what is marked */
+  if ($form_state['values']['op'] == t('Delete Selected')) return;
+
+  foreach ($form_state['values']['sizes'] as $key => $config) {
+    /* Only check if not empty */
+    if (!empty($config['label'])) {
+      /* width/height/weight must be > 0 */
+      if ($config['width'] < 1) {
+        form_set_error("sizes][$key][width", t('Width must be a positive integer.'));
+      }
+      if ($config['height'] < 1) {
+        form_set_error("sizes][$key][height", t('Height must be a positive integer.'));
+      }
+    }
+  }
+}
+
+function trackfield_map_sizes_submit($form, &$form_state) {
+  if ($form_state['values']['op'] == t('Delete Selected')) {
+    /* Load the settings and remove the ones checked for delete */
+    $deleted = 0;
+    $trackfield_format_sizes = variable_get('trackfield_map_format_sizes', array());
+    foreach ($form_state['values']['sizes'] as $config) {
+      if ($config['del']) {
+        $key = $config['label'];
+        if (array_key_exists($key, $trackfield_format_sizes)) {
+          unset($trackfield_format_sizes[$key]);
+          $deleted++;
+        }
+      }
+    }
+    if ($deleted) {
+      variable_set('trackfield_map_format_sizes', $trackfield_format_sizes);
+      drupal_set_message(t('@deleted configuration value@s deleted.', array('@deleted' => $deleted, '@s' => $deleted > 1 ? 's' : '')));
+      /* Clear CCK cache to pick up changed sizes */
+      content_clear_type_cache();
+    } else {
+      drupal_set_message(t('No valid options to delete.'));
+    }
+
+  } else {
+    /* Simply build array based on form_values and save it */
+    $trackfield_format_sizes = array();
+    foreach ($form_state['values']['sizes'] as $lp => $config) {
+      if (!empty($config['label'])) {
+        $key = $config['label'];
+        /* Remove items we don't need to save */
+        unset($config['del']);
+        unset($config['label']);
+        /* And change margins to array */
+        $trackfield_format_sizes[$key] = $config;
+      }
+    }
+    variable_set('trackfield_map_format_sizes', $trackfield_format_sizes);
+
+    drupal_set_message(t('The configuration options have been saved.'));
+  }
+}
+
+function _trackfield_map_optimise_for_gmap(&$item, $dlat, $dlon, $dx, $dy, $max) {
+  /*
+   * Use Anthony Cartmell's implementation of Douglas-Peuker.
+   * See: http://www.fonant.com/demos/douglas_peucker/algorithm
+   */
+  include_once 'PolylineReducer.php';
+
+  $points = array();
+  for ($lp = 0; $lp < count($item['latitude']); $lp++) {
+    $points[] = new GeoPoint($item['latitude'][$lp], $item['longitude'][$lp]);
+  }
+
+  /*
+   * Have a guess at tolerance.
+   */
+  $simple_line = $points;
+  $tolerance = max($dlat, $dlon) / 150;
+  while (count($simple_line) > $max) {
+    $reducer = new PolylineReducer($points);
+    $simple_line = $reducer->SimplerLine($tolerance);
+    $tolerance *= 2;
+  }
+
+  $out_lat = array();
+  $out_lon = array();
+  for ($lp = 0; $lp < count($simple_line); $lp++) {
+    $out_lat[] = $simple_line[$lp]->latitude;
+    $out_lon[] = $simple_line[$lp]->longitude;
+    }
+
+  $item['latitude'] = $out_lat;
+  $item['longitude'] = $out_lon;
+}

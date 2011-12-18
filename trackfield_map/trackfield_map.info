@@ -1,0 +1,8 @@
+name = Track Map
+description = "Draw maps from track fields."
+core = 7.x
+version = "7.x-0.5-dev"
+dependencies[] = trackfield
+dependencies[] = gmap
+package = Trackfield
+

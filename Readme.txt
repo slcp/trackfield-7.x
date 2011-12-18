@@ -6,5 +6,3 @@ Things to know regarding this version of Trackfield for Drupal 7:
 -- Trackfield does not currently update the Location data for the Node as it does in D6, a patch for this is welcome.
 
 -- Trackfield graph currently requires the graph configurations form to be saved once after install to assign timestamps and renders to the formatter, otherwise undefined index errors will thrown and the module will not function properly.
-
-

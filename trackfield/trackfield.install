@@ -1,18 +1,22 @@
 <?php
 /**
+ * @file
+ * Install, update and uninstall functions for the Trackfield module.
+ */
+
+/**
  * Implements hook_field_schema().
  *
  * This defines the actual database schema of the field, using the format
  * used by the Schema API.
  *
- *
  * @see hook_field_schema()
  * @link schemaapi Schema API @endlink
  */
- 
+
 function trackfield_field_schema($field) {
   $columns = array(
-  	 // Value is the raw input
+    // Value is the raw input
     'value' => array('type' => 'text', 'size' => 'big', 'sortable' => FALSE),
     'valuetype' => array('type' => 'text', 'size' => 'medium', 'sortable' => FALSE),
     'trackdatasets' => array('type' => 'text', 'size' => 'medium', 'sortable' => FALSE),
@@ -24,54 +28,48 @@ function trackfield_field_schema($field) {
 }
 
 function trackfield_schema() {
-	
-		$schema['trackfield_datasets'] = array(
-			'description' => 'Storage table for trackfield track data.',
-			'fields' => array(
-				'nid' => array(
-					'type' => 'int',
-					'unsigned' => TRUE,
-					'not null' => TRUE,
-					'default' => '0',
-				),
-				'vid' => array(
-					'type' => 'int',
-					'unsigned' => TRUE,
-					'not null' => TRUE,
-					'default' => '0',
-				),
-				'field_name' => array(
-					'type' => 'varchar',
-					'length' => 32,
-					'not null' => TRUE,
-					'default' => '',
-				),
-				'delta' => array(
-					'type' => 'int',
-					'unsigned' => TRUE,
-					'not null' => TRUE,
-					'default' => '0',
-				),
-				'settype' => array(
-					'type' => 'varchar',
-					'length' => 16,
-					'not null' => TRUE,
-					'default' => '',
-				),
-				'setdata' => array(
-					'type' => 'text',
-					'size' => 'big',
-					'not null' => TRUE,
-				),
-			),
-			'primary_key' => array('nid', 'vid', 'field_name', 'delta', 'settype'),
-		);
-		
-	return $schema;
-	
-	}
-					
-	
-				
+  $schema['trackfield_datasets'] = array(
+    'description' => 'Storage table for trackfield track data.',
+    'fields' => array(
+      'nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => '0',
+      ),
+      'vid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => '0',
+      ),
+      'field_name' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'delta' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => '0',
+      ),
+      'settype' => array(
+        'type' => 'varchar',
+        'length' => 16,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'setdata' => array(
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => TRUE,
+      ),
+    ),
+    'primary_key' => array('nid', 'vid', 'field_name', 'delta', 'settype'),
+  );
 
+  return $schema;
 
+}

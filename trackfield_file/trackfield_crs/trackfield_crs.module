@@ -1,11 +1,17 @@
 <?php
+/**
+ * @file
+ * Parses CRS XML formats for track data.
+ */
 
 /*
  * Types of input we understand.
  */
-
 DEFINE('DATASET_CRS', 'crs');
 
+/*
+ * Implements hook_trackfield_valuetypes()
+ */
 function trackfield_crs_trackfield_valuetypes() {
   return array(
     DATASET_CRS => t('CRS'),
@@ -24,13 +30,12 @@ function _trackfield_crs_setcsv(&$item) {
       while ($point) {
         $lat = trim($point->getElementsByTagName('LatitudeDegrees')->item(0)->nodeValue);
         $lon = trim($point->getElementsByTagName('LongitudeDegrees')->item(0)->nodeValue);
-        /* Only add point if lat/lon given */
+        // Only add point if lat/lon given.
         if (is_numeric($lat) && is_numeric($lon)) {
           $alt = trim($point->getElementsByTagName('AltitudeMeters')->item(0)->nodeValue);
           $hrt = trim($point->getElementsByTagName('HeartRateBpm')->item(0)->nodeValue);
           $cad = trim($point->getElementsByTagName('Cadence')->item(0)->nodeValue);
-
-          /* Convert time into number of seconds since start */
+          // Convert time into number of seconds since start.
           $tim = trim($point->getElementsByTagName('Time')->item(0)->nodeValue);
           if ($tim) {
             $tim = strtotime($tim);
@@ -42,7 +47,7 @@ function _trackfield_crs_setcsv(&$item) {
           $csv .= "$lon,$lat,$alt,$tim,$hrt,$cad";
         }
 
-        /* Move to next point of interest in the list */
+        // Move to next point of interest in the list.
         do {
           $point = $point->nextSibling;
         } while ($point && $point->nodeName != $pointname);
@@ -54,6 +59,9 @@ function _trackfield_crs_setcsv(&$item) {
   $item['value'] = $new_value;
 }
 
+/*
+ * Implements hook_trackfield_validate().
+ */
 function trackfield_crs_trackfield_validate($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_crs_trackfield_valuetypes())) { return; }
@@ -65,6 +73,9 @@ function trackfield_crs_trackfield_validate($item, $node, $delta, $langcode) {
   return trackfield_csv_trackfield_validate($item, $node, $delta, $langcode);
 }
 
+/*
+ * Implements hook_trackfield_submit().
+ */
 function trackfield_crs_trackfield_submit($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_crs_trackfield_valuetypes())) { return; }
@@ -72,5 +83,3 @@ function trackfield_crs_trackfield_submit($item, $node, $delta, $langcode) {
   _trackfield_crs_setcsv($item);
   return trackfield_csv_trackfield_submit($item, $node, $delta, $langcode);
 }
-
-?>

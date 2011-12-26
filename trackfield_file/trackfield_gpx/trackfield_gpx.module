@@ -26,9 +26,16 @@ function _trackfield_gpx_setcsv(&$item) {
         $lat = trim($point->getAttributeNode('lat')->value);
         $lon = trim($point->getAttributeNode('lon')->value);
         $alt = trim($point->getElementsByTagName('ele')->item(0)->nodeValue);
-        
+        // Extract time from GPX.
+        $tim = trim($point->getElementsByTagName('time')->item(0)->nodeValue);
+        // Convert time into number of seconds since start.
+        if ($tim) {
+          $tim = strtotime($tim);
+          if (!isset($csv)) { $tim_base = $tim; }
+          $tim = $tim - $tim_base;
+        }
         if (isset($csv)) { $csv .= ' '; }
-        $csv .= "$lon,$lat,$alt";
+        $csv .= "$lon,$lat,$alt,$tim";
         
         /* Move to next point of interest in the list */
         do {

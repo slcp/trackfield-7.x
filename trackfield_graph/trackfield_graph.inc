@@ -1,4 +1,8 @@
 <?php
+/**
+ * @file
+ * Handle graphing for Trackfield values using JPGraph library.
+ */
 
 /* Where we will store our cached graphs */
 DEFINE('TRACKFIELD_GRAPH_CACHE_PATH', 'trackfield_cache');

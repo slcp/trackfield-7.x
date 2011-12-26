@@ -16,7 +16,13 @@
  */
 function trackfield_map_field_schema($field) {
   $columns = array(
-    'dummy' => array('type' => 'int', 'size' => 'tiny', 'unsigned' => TRUE, 'default' => 1, 'sortable' => FALSE),
+    'dummy' => array(
+      'type' => 'int',
+      'size' => 'tiny',
+      'unsigned' => TRUE,
+      'default' => 1,
+      'sortable' => FALSE,
+    ),
   );
   return array(
     'columns' => $columns,

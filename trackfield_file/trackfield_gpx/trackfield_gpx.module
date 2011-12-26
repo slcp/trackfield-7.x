@@ -32,10 +32,10 @@ function _trackfield_gpx_setcsv(&$item) {
         $lat = trim($point->getAttributeNode('lat')->value);
         $lon = trim($point->getAttributeNode('lon')->value);
         $alt = trim($point->getElementsByTagName('ele')->item(0)->nodeValue);
-        
+
         if (isset($csv)) { $csv .= ' '; }
         $csv .= "$lon,$lat,$alt";
-        
+
         // Move to next point of interest in the list.
         do {
           $point = $point->nextSibling;

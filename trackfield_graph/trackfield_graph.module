@@ -1,22 +1,26 @@
 <?php
+/**
+ * @file
+ * Trackfield Graph plots trackfield user input onto a graph.
+ *
+ * Provides configurable graph settings including size and colors. Provides a
+ * static image and javascript based options.
+ */
 
 /*
- * TODO: Be able to graph userdata when that's available.
- * At the moment this only graphs altitude data, of course this
- * needs to change. Multiple lines with multiple axis would also
- * be nice.
+ * @todo: Be able to graph userdata when that's available. At the moment this
+ * only graphs altitude data, of course this needs to change. Multiple lines
+ * with multiple axis would also be nice.
  */
 
 DEFINE('DEFAULT_GRAPH_FORMATTER', 'default');
-
 DEFINE('TRACKFIELD_GRAPH_PATH', 'trackfield_graph/graph');
 DEFINE('TRACKFIELD_GRAPHDATA_JQPLOT_PATH', 'trackfield_graph/jqplotdata');
 DEFINE('TRACKFIELD_GRAPHDATA_PATH', 'trackfield_graph/graphdata');
 
 /*
- * Implementation of hook_menu().
+ * Implements hook_menu().
  */
-
 function trackfield_graph_menu() {
   $items = array();
 
@@ -37,7 +41,7 @@ function trackfield_graph_menu() {
     'page callback' => '_trackfield_graph_do_graphdata',
   );
 
-  /* Admin menu */
+  // Admin menu.
   $access = user_access('administer trackfield');
   $items['admin/settings/trackfield/graph'] = array(
     'type' => MENU_LOCAL_TASK,
@@ -74,34 +78,31 @@ function trackfield_graph_field_info() {
  * Implements hook_field_delete().
  */
 function trackfield_graph_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
-	  }
+}
 
 /**
  * Implements hook_field_validate().
  */
 function trackfield_graph_field_validate ($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
-
-	 }
+}
 
 /**
  * Implements hook_field_presave().
  */
 function trackfield_graph_field_presave ($entity_type, $entity, $field, $instance, $langcode, &$items, &$errors) {
-
-      }
+}
 
 /**
  * Implements hook_field_update().
  */
 function trackfield_graph_field_update($entity_type, $entity, $field, $instance, $langcode, &$items) {
-    }
+}
 
 /**
  * Implements hook_field_insert().
  */
 function trackfield_graph_field_insert($entity_type, $entity, $field, $instance, $langcode, &$items) {
-    
-     }
+}
 
 
 /**
@@ -112,45 +113,42 @@ function trackfield_graph_field_is_empty($item, $field) {
 }
 
 /**
- * Implementation of hook_field_settings_form().
+ * Implements hook_field_settings_form().
  */
 function trackfield_graph_field_settings_form($field, $instance, $has_data) {
-  
-	 	$settings = $field['settings'];
-	
-      global $_trackfield_norm_types;
-      $form = array(
-        'reference_field_name' => array(
-          '#type' => 'textfield',
-          '#rows' => 1,
-          '#title' => t('Reference Field Name'),
-          '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
-          '#required' => true
-        ),
-        'normalise' => array(
-          '#type' => 'select',
-          '#title' => t('Normalise As'),
-          '#default_value' => isset($settings['normalise']) ? $settings['normalise'] : '',
-          '#options' => $_trackfield_norm_types,
-        )
-      );
-      
-      $form['#element_validate'] = array('trackfield_graph_settings_form_validate');
-      
-      return $form;
-  }
-  
+  $settings = $field['settings'];
+
+  global $_trackfield_norm_types;
+  $form = array(
+    'reference_field_name' => array(
+      '#type' => 'textfield',
+      '#rows' => 1,
+      '#title' => t('Reference Field Name'),
+      '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
+      '#required' => true
+    ),
+    'normalise' => array(
+      '#type' => 'select',
+      '#title' => t('Normalise As'),
+      '#default_value' => isset($settings['normalise']) ? $settings['normalise'] : '',
+      '#options' => $_trackfield_norm_types,
+    )
+  );
+  $form['#element_validate'] = array('trackfield_graph_settings_form_validate');
+
+  return $form;
+}
+
 function trackfield_graph_settings_form_validate($element, &$form_state) {
-	
-	$valid_fields = array();
-	 if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
-        if (array_count_values($valid_fields) == 0) {
-          form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
-        } else {
-          form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
-        }
-  		}
+  $valid_fields = array();
+  if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
+    if (array_count_values($valid_fields) == 0) {
+      form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
+    } else {
+      form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
     }
+  }
+}
 
 
 
@@ -165,15 +163,16 @@ function trackfield_graph_settings_form_validate($element, &$form_state) {
  * Implements hook_field_formatter_info().
  */
 function trackfield_graph_field_formatter_info() {
-
   $formatters = array();
   $trackfield_format_sizes = variable_get('trackfield_graph_format_sizes', array());
   foreach (array_keys($trackfield_format_sizes) as $formatter) {
-    $formatters['trackfield_graph_' . ($formatter)] = array('label' => t($formatter), 'field types' => array('trackgraph'));
+    $formatters['trackfield_graph_' . ($formatter)] = array(
+      'label' => t($formatter),
+      'field types' => array('trackgraph'),
+    );
   }
 
-  return $formatters; 
-
+  return $formatters;
 }
 
 /**
@@ -182,45 +181,37 @@ function trackfield_graph_field_formatter_info() {
 function trackfield_graph_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $element = array();  
   $settings = $field['settings'];
-  krumo($display['type']);
-  
+
   foreach($items as $delta => $item) {
-  $value = isset($item['value']) ? check_plain($item['value']) : NULL;
-  
-  switch($display['type']) {
-  
-  case 'trackfield_graph_default':
-  default :
-  	  
-  $ref_field_name = $settings['reference_field_name'];
-  $normalise = $settings['normalise'];
+    $value = isset($item['value']) ? check_plain($item['value']) : NULL;
+    switch($display['type']) {
+      case 'trackfield_graph_default':
+      default :
+        $ref_field_name = $settings['reference_field_name'];
+        $normalise = $settings['normalise'];
 
-  /*
-   * We can't draw anything if there's no altitude data.
-   */
-  $fset = $entity->{$ref_field_name}[$langcode];
-  if (!in_array('altitude', explode(',', $fset[$delta]['trackdatasets']))) { return 'No Altitude'; }
+        // We can't draw anything if there's no altitude data.
+        $fset = $entity->{$ref_field_name}[$langcode];
+        if (!in_array('altitude', explode(',', $fset[$delta]['trackdatasets']))) {
+          return 'No Altitude';
+        }
+        // We can't draw anything for previews.
+        // if ($entity->in_preview == TRUE) {
+        // return 'Graph is not available in preview';
+        // }
 
-  /*
-   * We can't draw anything for previews.
-   */
-  //if ($entity->in_preview == TRUE) { return 'Graph is not available in preview'; }
+        // Look in the sizes array for definitions matching the formatter
+        // and create image link for that.
+        $formatter = (substr($display['type'], strlen('trackfield_graph_')));
+        $out = _trackfield_graph_render($formatter, $entity->nid . ',' . $entity->vid . ',' . $ref_field_name, $normalise);
 
-  /*
-   * Look in the sizes array for definitions matchin the formatter
-   * and create image link for that.
-   */
+        $element[$delta]['#markup'] = $out;
 
-  $formatter = (substr($display['type'], strlen('trackfield_graph_')));
-  $out = _trackfield_graph_render($formatter, $entity->nid . ',' . $entity->vid . ',' . $ref_field_name, $normalise);
-krumo($out);
-  $element[$delta]['#markup'] = 	$out;
-    
-  return $element;
+        return $element;
+        break;
+    }
   }
-  }
-  }
-
+}
 
 /**************************************************************************
  * Field Type API: Widget
@@ -237,7 +228,7 @@ function trackfield_graph_field_widget_info() {
     'trackfield_graph_none' => array(
       'label' => t('None Required'),
       'field types' => array('trackgraph'),
-    ),	
+    ),
   );
 }
 
@@ -250,40 +241,31 @@ function trackfield_graph_field_widget_settings_form($field, $instance) {
 /**
  * Implements hook_field_widget_form().
  */
- 
 function trackfield_graph_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
- 
-   switch ($instance['widget']['type']) {
-	
+  switch ($instance['widget']['type']) {
     case 'trackfield_graph_none':
-    
-    /* Is this necessary? */
-	 /*
-     * If we don't return at least a blank array then this field
-     * will not appear in the 'manage fields' tab inside content.
-     */
-    
-        $element['value'] = array(
-        '#type' => 'hidden',	
+    // Is this necessary? - slcp
+    //
+    // If we don't return at least a blank array then this field
+    // will not appear in the 'manage fields' tab inside content.
+      $element['value'] = array(
+        '#type' => 'hidden',
         '#title' => 'Graph Placeholder...',
         '#required' => FALSE,
-        '#default_value' => NULL,	
+        '#default_value' => NULL,
       );
-  break; 
+      break;
   }
 
   return $element;
-
 }
 
 function _trackfield_graph_render($formatter, $args, $normalise) {
   static $jqplot_ids = 1;
-
   $trackfield_format_sizes = variable_get('trackfield_graph_format_sizes', array());
-  
+
   if ($trackfield_format_sizes[$formatter]['renderer'] == 'jqplot') {
-    /* Render with jqplot */
-    krumo('BOO!');
+    // Render with jqplot.
     $id = 'trackfield_jqplot_' . $jqplot_ids++;
 
     drupal_add_js(drupal_get_path('module', 'trackfield') . '/jqplot/jquery.jqplot.min.js');
@@ -296,52 +278,49 @@ function _trackfield_graph_render($formatter, $args, $normalise) {
       'JqplotDataUrl' => url('trackfield_graph/jqplotdata'),
     );
     drupal_add_js(array('trackfield_graph' => $settings), 'setting');
-    
+
     $out = sprintf('<div id="%s" class="plot trackfield" style="width:%dpx;height:%dpx"><div class="args">%s</div></div>',
       $id,
       $trackfield_format_sizes[$formatter]['width'],
       $trackfield_format_sizes[$formatter]['height'],
       $args . '/' . $formatter . '/' . $normalise);
   } else {
-    /* Render with JpGraph */
+    // Render with JpGraph.
     $out = sprintf('<img width="%d" height="%d" src="%s"/>',
       $trackfield_format_sizes[$formatter]['width'],
       $trackfield_format_sizes[$formatter]['height'],
       urldecode(url(TRACKFIELD_GRAPH_PATH . '/' . $args . '/' . $formatter . '/' . $normalise)));
   }
-  
+
   return $out;
 }
 
 function _trackfield_graph_do_graph() {
   include_once(drupal_get_path('module', 'trackfield_graph') .'/trackfield_graph.inc');
-  
-  
   $args = _trackfield_graph_graphargs();
   _trackfield_graph(_trackfield_graph_graphargs());
 }
 
+/*
+ * Get arguments for passing to graph and graphdata functions.
+ * These are encoded as arg(2)...
+ * The URL is something like:
+ * TRACKFIELD_GRAPH_PATH/graph/nid,vid,field[[,delta],[xset,yset]];...nid,vid,field[,delta]/size(/normalise)
+ * or
+ * TRACKFIELD_GRAPH_PATH/graphdata/nid,vid,field[,delta]
+ * 
+ * If more than one item is given, but nid,vid,field is ommitted the previous is assumed.
+ * If delta is ommitted zero is assumed.
+ * Eg.
+ * TRACKFIELD_GRAPH_PATH/graph/nid,vid,field;,,,,distance,heartrate
+ * Will graph distance/altitude (default) plus distance/heartrate
+ */
 function _trackfield_graph_graphargs() {
-  /*
-   * Get arguments for passing to graph and graphdata functions.
-   * These are encoded as arg(2)...
-   * The URL is something like:
-   * TRACKFIELD_GRAPH_PATH/graph/nid,vid,field[[,delta],[xset,yset]];...nid,vid,field[,delta]/size(/normalise)
-   * or
-   * TRACKFIELD_GRAPH_PATH/graphdata/nid,vid,field[,delta]
-   * 
-   * If more than one item is given, but nid,vid,field is ommitted the previous is assumed.
-   * If delta is ommitted zero is assumed.
-   * Eg.
-   * TRACKFIELD_GRAPH_PATH/graph/nid,vid,field;,,,,distance,heartrate
-   * Will graph distance/altitude (default) plus distance/heartrate
-   */
-    
   $itemlist = array();
   $xset = 'distance';
   $yset = 'altitude';
   $delta = 0;
-  
+
   foreach(explode(';', arg(2)) as $item) {
     $parts = explode(',', $item);
     if (isset($parts[0]) && $parts[0] != '') { $nid = $parts[0]; }
@@ -359,16 +338,15 @@ function _trackfield_graph_graphargs() {
       'yset' => $yset,
     );
   }
-  
+
   $args = array(
     'items' => $itemlist
   );
   $args['formatter'] = arg(3) ? arg(3) : DEFAULT_GRAPH_FORMATTER;
   $args['normal_type'] = arg(4) ? arg(4) : TRACKFIELD_DEFAULT_NORM;
-  
+
   return $args;
 }
-
 
 /*
  * Admin page below here.
@@ -377,23 +355,21 @@ function _trackfield_graph_graphargs() {
 include_once(drupal_get_path('module', 'trackfield') .'/jpgraph/src/jpgraph_ttf.inc.php');
 
 function _trackfield_is_fixed_jpgraph_font($font) {
-  if ($font == FF_FONT0 ||
-      $font == FF_FONT1 ||
-      $font == FF_FONT2) return TRUE;
+  if ($font == FF_FONT0 || $font == FF_FONT1 || $font == FF_FONT2) { return TRUE; }
   return FALSE;
 }
 
 function _trackfield_graph_admin() {
   $trackfield_format_sizes = variable_get('trackfield_graph_format_sizes', array());
-  /* Add a blank line for new entries */
+  // Add a blank line for new entries.
   $trackfield_format_sizes[''] = array();
-  
+
   $form['sizes'] = array(
     '#type' => 'fieldset',
     '#title' => t('Graph sizes'),
     '#tree' => TRUE,
     '#theme' => 'trackfield_graph_sizes_form',
-    '#description' => t('Various size graphing options are available whenever these are shown (in teaser, full node, views, etc). Define the possible choices required here.<br>Margins are "left,right,top,bottom"')
+    '#description' => t('Various size graphing options are available whenever these are shown (in teaser, full node, views, etc). Define the possible choices required here.<br>Margins are "left,right,top,bottom"'),
   );
 
   $jpgraph_fonts = array(
@@ -407,14 +383,11 @@ function _trackfield_graph_admin() {
 
   $lp = 0;
   foreach ($trackfield_format_sizes as $key => $config) {
-
     if(isset($config['margins'])) {
-    	$margins = is_array($config['margins']) ? join(',', $config['margins']) : $config['margins'];
-    	}
-    else {
-    	$margins = '';
-    	}  	
-
+      $margins = is_array($config['margins']) ? join(',', $config['margins']) : $config['margins'];
+    } else {
+      $margins = '';
+      }
 
     $form['sizes'][$lp]['del'] = array(
       '#type' => 'checkbox',
@@ -461,7 +434,7 @@ function _trackfield_graph_admin() {
     $form['sizes'][$lp]['axis_font'] = array(
       '#type' => 'select',
       '#default_value' => $config ? $config['axis_font'] : 2,
-      '#options' => $jpgraph_fonts,    
+      '#options' => $jpgraph_fonts,
     );
     $form['sizes'][$lp]['axis_font_size'] = array(
       '#type' => 'textfield',
@@ -481,11 +454,11 @@ function _trackfield_graph_admin() {
     );
     $lp++;
   }
-  
+
   $trackfield_format_cols = variable_get('trackfield_graph_format_cols', array());
-  /* Add a blank line for new entries */
+  // Add a blank line for new entries.
   $trackfield_format_cols[''] = array();
-  
+
   $form['cols'] = array(
     '#type' => 'fieldset',
     '#title' => t('Graph colours'),
@@ -496,21 +469,18 @@ function _trackfield_graph_admin() {
 
   $lp = 0;
   foreach ($trackfield_format_cols as $key => $config) {
-  	
     if(isset($config['fill_col'])) {
-    	$fill_col = is_array($config['fill_col']) ? join(',', $config['fill_col']) : $config['fill_col'];
-    	}
-    else {
-    	$fill_col = '';
-    	}
-    	
+      $fill_col = is_array($config['fill_col']) ? join(',', $config['fill_col']) : $config['fill_col'];
+    } else {
+      $fill_col = '';
+    }
+
     if(isset($config['col'])) {
-    	$col = is_array($config['col']) ? join(',', $config['col']) : $config['col'];
-    	}
-    else {
-    	$col = '';
-    	}  	
-  	
+      $col = is_array($config['col']) ? join(',', $config['col']) : $config['col'];
+    } else {
+      $col = '';
+    }
+
     $form['cols'][$lp]['del'] = array(
       '#type' => 'checkbox',
     );
@@ -519,13 +489,13 @@ function _trackfield_graph_admin() {
       '#default_value' => $key,
       '#size' => 15,
       '#maxlength' => 32,
-    ); 
+    );
     $form['cols'][$lp]['col'] = array(
       '#type' => 'textfield',
       '#default_value' => $col,
       '#size' => 20,
       '#maxlength' => 128,
-    );   
+    );
     $form['cols'][$lp]['fill_col'] = array(
       '#type' => 'textfield',
       '#default_value' =>  $fill_col,
@@ -563,19 +533,19 @@ function _trackfield_graph_admin() {
   $form['buttons']['delete'] = array('#type' => 'submit', '#value' => t('Delete Selected'));
   $form['#submit'] = array('trackfield_graph_sizes_submit');
   $form['#validate'] = array('trackfield_graph_sizes_validate');
-  
+
   return $form;
 }
 
 function trackfield_graph_theme() {
-    return array(
-      'trackfield_graph_sizes_form' => array(
-        'render element' => 'element',
-      ),
-      'trackfield_graph_cols_form' => array(
-        'render element' => 'element',
-      ),
-    );
+  return array(
+    'trackfield_graph_sizes_form' => array(
+      'render element' => 'element',
+    ),
+    'trackfield_graph_cols_form' => array(
+      'render element' => 'element',
+    ),
+  );
 }
 
 function theme_trackfield_graph_sizes_form($element) {
@@ -584,7 +554,7 @@ function theme_trackfield_graph_sizes_form($element) {
   $element = $element['element'];
 
   foreach (element_children($element) as $key) {
-    $row = array();	
+    $row = array();
     $row[] = drupal_render($element[$key]['del']);
     $row[] = drupal_render($element[$key]['label']);
     $row[] = drupal_render($element[$key]['renderer']);
@@ -599,7 +569,7 @@ function theme_trackfield_graph_sizes_form($element) {
     $row[] = drupal_render($element[$key]['resample']);
     $rows[] = $row;
   }
-  
+
   $output = '';
   $output .= theme('table', array('header' => $header,'rows' => $rows));
 
@@ -610,7 +580,7 @@ function theme_trackfield_graph_cols_form($element) {
   $header = array(t('Del'), t('Label'), t('Line'), t('Fill'));
   $rows = array();
   $element = $element['element'];
-  
+
   foreach (element_children($element) as $key) {
     $row = array();
     $row[] = drupal_render($element[$key]['del']);
@@ -619,22 +589,21 @@ function theme_trackfield_graph_cols_form($element) {
     $row[] = drupal_render($element[$key]['fill_col']);
     $rows[] = $row;
   }
-  
+
   $output = '';
   $output .= theme('table', array('header' => $header,'rows' => $rows));
-  //$output .= drupal_render($form);
 
   return $output;
 }
 
 function trackfield_graph_sizes_validate($form, &$form_state) {
-  /* Don't bother if just deleting what is marked */
+  // Don't bother if just deleting what is marked.
   if ($form_state['values']['op'] == t('Delete Selected')) return;
 
   foreach ($form_state['values']['sizes'] as $key => $config) {
-    /* Only check if not empty */
+    // Only check if not empty.
     if (!empty($config['label'])) {
-      /* width/height/weight must be > 0 */
+      // width/height/weight must be > 0.
       if ($config['width'] < 1) {
         form_set_error("sizes][$key][width", t('Width must be a positive integer.'));
       }
@@ -645,16 +614,15 @@ function trackfield_graph_sizes_validate($form, &$form_state) {
         if ($config['weight'] < 1) {
           form_set_error("sizes][$key][weight", t('Line must be a positive integer.'));
         }
-        /* There must be 4 margins and must not be negative */
+        // There must be 4 margins and must not be negative.
         $margin_parts = explode(',', $config['margins']);
         if (count($margin_parts) != 4) {
           form_set_error("sizes][$key][margins", t('Margin must be specified as "left, right, top, bottom".'));
         } else if (min($margin_parts) < 0) {
           form_set_error("sizes][$key][margins", t('No margins may be negative.'));
         }
-        /* Resample doesn't work with fixed fonts */
-        if (_trackfield_is_fixed_jpgraph_font($config['axis_font']) &&
-            $config['resample'] != 1) {
+        // Resample doesn't work with fixed fonts.
+        if (_trackfield_is_fixed_jpgraph_font($config['axis_font']) && $config['resample'] != 1) {
           form_set_error("sizes][$key][resample", t('Resample does not work with fixed fonts.'));
         }
         if (!_trackfield_is_fixed_jpgraph_font($config['axis_font']) && $config['axis_font_size'] < 1) {
@@ -677,7 +645,7 @@ function trackfield_graph_sizes_validate($form, &$form_state) {
 
 function trackfield_graph_sizes_submit($form, &$form_state) {
   if ($form_state['values']['op'] == t('Delete Selected')) {
-    /* Load the settings and remove the ones checked for delete */
+    // Load the settings and remove the ones checked for delete.
     $deleted = 0;
     $trackfield_format_sizes = variable_get('trackfield_graph_format_sizes', array());
     foreach ($form_state['values']['sizes'] as $config) {
@@ -702,23 +670,25 @@ function trackfield_graph_sizes_submit($form, &$form_state) {
     if ($deleted) {
       variable_set('trackfield_graph_format_sizes', $trackfield_format_sizes);
       variable_set('trackfield_graph_format_cols', $trackfield_format_cols);
-      drupal_set_message(t('@deleted configuration value@s deleted.', array('@deleted' => $deleted, '@s' => $deleted > 1 ? 's' : '')));
+      drupal_set_message(t('@deleted configuration value@s deleted.', array(
+        '@deleted' => $deleted,
+        '@s' => $deleted > 1 ? 's' : '',
+      )));
     } else {
       drupal_set_message(t('No valid options to delete.'));
     }
-
   } else {
-    /* Simply build array based on form_values and save it */
+    // Simply build array based on form_values and save it.
     $trackfield_format_sizes = array();
     foreach ($form_state['values']['sizes'] as $lp => $config) {
       if (!empty($config['label'])) {
         $key = $config['label'];
-        /* Remove items we don't need to save */
+        // Remove items we don't need to save.
         unset($config['del']);
         unset($config['label']);
-        /* And change margins to array */
+        // And change margins to array.
         $config['margins'] = explode(',', $config['margins']);
-        /* Record when settings changed for caching */
+        // Record when settings changed for caching.
         $config['timestamp'] = time();
         $trackfield_format_sizes[$key] = $config;
       }
@@ -729,13 +699,13 @@ function trackfield_graph_sizes_submit($form, &$form_state) {
     foreach ($form_state['values']['cols'] as $lp => $config) {
       if (!empty($config['label'])) {
         $key = $config['label'];
-        /* Remove items we don't need to save */
+        // Remove items we don't need to save.
         unset($config['del']);
         unset($config['label']);
-        /* And change col/fill_col to array */
+        // And change col/fill_col to array.
         $config['col'] = explode(',', $config['col']);
         $config['fill_col'] = explode(',', $config['fill_col']);
-        /* Record when settings changed for caching */
+        // Record when settings changed for caching.
         $config['timestamp'] = time();
         $trackfield_format_cols[$key] = $config;
       }
@@ -748,7 +718,5 @@ function trackfield_graph_sizes_submit($form, &$form_state) {
 
     drupal_set_message(t('The configuration options have been saved.'));
   }
-  
-  /* TODO: Check view arguments are still valid */
+  // @todo Check view arguments are still valid.
 }
-

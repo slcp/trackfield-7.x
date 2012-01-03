@@ -1,26 +1,29 @@
 <?php
+/**
+ * @file
+ * Trackfield Stats calculates statistics using user data from a Trackfield.
+ */
 
 /*
  * Types of statistic we understand.
  * Array of:
  *  value stored in DB => display value
  */
-
 global $_trackfield_stats_presets;
 $_trackfield_stats_presets = array(
-  /* Distance related */
+  // Distance related.
   'distance' => array(
     'label' => t('Distance'),
     'op' => 'end',
     'args' => array('distance')),
-    
-  /* Time related */
+
+  // Time related.
   'time' => array(
     'label' => t('Time'),
     'op' => 'end',
     'args' => array('seconds')),
 
-  /* Altitude related  */
+  // Altitude related.
   'alt_change' => array(
     'label' => t('Altitude Change (overall)'),
     'op' => 'change',
@@ -79,7 +82,6 @@ $_trackfield_stats_presets = array(
     'label' => t('Distance Flat'),
     'op' => 'on_flat',
     'args' => array('distance', 'altitude', 0.25)),
-
 );
 
 global $_trackfield_stats_op_types;
@@ -123,80 +125,72 @@ function trackfield_stats_field_info() {
 }
 
 /**
- * Implements hook_field_delete().
- */
-function trackfield_stats_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
-	  }
-
-/**
  * Implements hook_field_validate().
  */
 function trackfield_stats_field_validate ($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
-	 /*
-     * TODO: make detection of input validation more useful.
-     */	 
-	 if (is_array($items)) {
-      foreach ($items as $delta => $item) {
-        if ($item['value'] != '') {
-          /* TODO: make this test more generic */
-          if (_trackfield_stats_is_time($field)) {
-            if (_trackfield_stats_txt2secs($item['value']) < 1) {
-              $errors[$field['field_name']][$langcode][$delta][] = array('error' => 'error_error', 'message' => 'Field ' . t($instance['widget']['label']) . ': Not a valid time.');
-            }
-          ;}
+  // @todo Make detection of input validation more useful.
+  if (is_array($items)) {
+    foreach ($items as $delta => $item) {
+      if ($item['value'] != '') {
+        // @todo Make this test more generic.
+        if (_trackfield_stats_is_time($field)) {
+          if (_trackfield_stats_txt2secs($item['value']) < 1) {
+            $errors[$field['field_name']][$langcode][$delta][] = array(
+              'error' => 'error_error',
+              'message' => 'Field ' . t($instance['widget']['label']) . ': Not a valid time.',
+            );
+          }
         ;}
-      }
-    ;}	
-	 }
+      ;}
+    }
+  ;}
+}
 
 /**
  * Implements hook_field_presave().
  */
 function trackfield_stats_field_presave ($entity_type, $entity, $field, $instance, $langcode, &$items, &$errors) {
-	/*
-     * Calculate stat if no input was given and that is possible.
-     */ 
-	 $settings = $field['settings'];
-    $field_name = $settings['reference_field_name'];
-    $fset = $entity->{$field_name}[$langcode];
+  // Calculate stat if no input was given and that is possible.
+  $settings = $field['settings'];
+  $field_name = $settings['reference_field_name'];
+  $fset = $entity->{$field_name}[$langcode];
 
-    foreach ($items as $delta => $item) {
-    	
-      if ($item['value'] != '') {
-        /* It was entered - take users value */
-        /* TODO: make this test more generic */
-        if (_trackfield_stats_is_time($field)) {
-          $items[$delta]['value'] = _trackfield_stats_txt2secs($items[$delta]['value']);
-        }
-        $items[$delta]['is_manual'] = 1;
-      } else if ($fset[$delta]['value'] != '') {
-        /* Get op/args from preset if necessary */
-        if (array_key_exists('stat_preset', $settings)) {
-          global $_trackfield_stats_presets;
-          $op = $_trackfield_stats_presets[$settings['stat_preset']]['op'];
-          $args = $_trackfield_stats_presets[$settings['stat_preset']]['args'];
-        } else {
-          $op = $settings['stat_op'];
-          $args = explode(',', $settings['stat_args']);
-        }
+  foreach ($items as $delta => $item) {
+    if ($item['value'] != '') {
+      // It was entered - take users value.
+      // @todo Make this test more generic.
+      if (_trackfield_stats_is_time($field)) {
+        $items[$delta]['value'] = _trackfield_stats_txt2secs($items[$delta]['value']);
+      }
+      $items[$delta]['is_manual'] = 1;
+    } else if ($fset[$delta]['value'] != '') {
+      // Get op/args from preset if necessary.
+      if (array_key_exists('stat_preset', $settings)) {
+        global $_trackfield_stats_presets;
+        $op = $_trackfield_stats_presets[$settings['stat_preset']]['op'];
+        $args = $_trackfield_stats_presets[$settings['stat_preset']]['args'];
+      } else {
+        $op = $settings['stat_op'];
+        $args = explode(',', $settings['stat_args']);
+      }
 
-        /* If we have to normalise  - set norm_factor */
-        $norm_factor = 1;
-        $fset_attr = unserialize($fset[$delta]['attributes']);
-        if ($settings['normalise'] == TRACKFIELD_NORM_REVERSE ||
-            ($settings['normalise'] == TRACKFIELD_NORM_AS_CLIMB && in_array('altitude', $args) && !$fset_attr['is_climb']) ||
-            ($settings['normalise'] == TRACKFIELD_NORM_AS_DESCENT && in_array('altitude', $args) && $fset_attr['is_climb'])) {
-          _trackfield_stats_reverse_op($op, $norm_factor);
-        }
+      // If we have to normalise  - set norm_factor.
+      $norm_factor = 1;
+      $fset_attr = unserialize($fset[$delta]['attributes']);
+      if ($settings['normalise'] == TRACKFIELD_NORM_REVERSE ||
+         ($settings['normalise'] == TRACKFIELD_NORM_AS_CLIMB && in_array('altitude', $args) && !$fset_attr['is_climb']) ||
+         ($settings['normalise'] == TRACKFIELD_NORM_AS_DESCENT && in_array('altitude', $args) && $fset_attr['is_climb'])) {
+         _trackfield_stats_reverse_op($op, $norm_factor);
+      }
 
-        /* Calculate it */
-        switch ($op) {
+      // Calculate it.
+      switch ($op) {
         case 'min':
           if (array_key_exists($args[0], $fset[$delta])) {
             $items[$delta]['value'] = min($fset[$delta][$args[0]]);
           }
           break;
-          
+
         case 'max':
           if (array_key_exists($args[0], $fset[$delta])) {
             $items[$delta]['value'] = max($fset[$delta][$args[0]]);
@@ -254,12 +248,13 @@ function trackfield_stats_field_presave ($entity_type, $entity, $field, $instanc
               }
             }
             switch ($op) {
-            case 'cumulative_rise':
-              $items[$delta]['value'] = $a_climb;
-              break;
-            case 'cumulative_fall':
-              $items[$delta]['value'] = $a_descent;
-              break;
+              case 'cumulative_rise':
+                $items[$delta]['value'] = $a_climb;
+                break;
+
+              case 'cumulative_fall':
+                $items[$delta]['value'] = $a_descent;
+                break;
             }
           }
           break;
@@ -298,15 +293,17 @@ function trackfield_stats_field_presave ($entity_type, $entity, $field, $instanc
               $dl = $db;
             }
             switch ($op) {
-            case 'on_rise':
-              $items[$delta]['value'] = $d_climb;
-              break;
-            case 'on_fall':
-              $items[$delta]['value'] = $d_descent;
-              break;
-            case 'on_flat':
-              $items[$delta]['value'] = $d_flat;
-              break;
+              case 'on_rise':
+                $items[$delta]['value'] = $d_climb;
+                break;
+
+              case 'on_fall':
+                $items[$delta]['value'] = $d_descent;
+                break;
+
+              case 'on_flat':
+                $items[$delta]['value'] = $d_flat;
+                break;
             }
           }
           break;
@@ -322,10 +319,7 @@ function trackfield_stats_field_presave ($entity_type, $entity, $field, $instanc
           }
           break;
 
-        /*
-         * Work out grade min/max with the same code for (sort of)
-         * neatness.
-         */
+        // Work out grade min/max with the same code for (sort of) neatness.
         case 'grade_max':
         case 'grade_min':
           if (array_key_exists($args[0], $fset[$delta]) &&
@@ -352,36 +346,23 @@ function trackfield_stats_field_presave ($entity_type, $entity, $field, $instanc
               }
             }
             switch ($op) {
-            case 'grade_max':
-              $items[$delta]['value'] = $g_max;
-              break;
-            case 'grade_min':
-              $items[$delta]['value'] = $g_min;
-              break;
+              case 'grade_max':
+                $items[$delta]['value'] = $g_max;
+                break;
+
+              case 'grade_min':
+                $items[$delta]['value'] = $g_min;
+                break;
             }
           }
           break;
         }
 
-        $items[$delta]['value'] *= $norm_factor;
-        $items[$delta]['is_manual'] = 0;
-      }
+      $items[$delta]['value'] *= $norm_factor;
+      $items[$delta]['is_manual'] = 0;
     }
-      }
-
-/**
- * Implements hook_field_update().
- */
-function trackfield_stats_field_update($entity_type, $entity, $field, $instance, $langcode, &$items) {
-    }
-
-/**
- * Implements hook_field_insert().
- */
-function trackfield_stats_field_insert($entity_type, $entity, $field, $instance, $langcode, &$items) {
-    
-     }
-
+  }
+}
 
 /**
  * Implements hook_field_is_empty().
@@ -391,81 +372,77 @@ function trackfield_stats_field_is_empty($item, $field) {
 }
 
 /**
- * Implementation of hook_field_settings_form().
+ * Implements hook_field_settings_form().
  */
 function trackfield_stats_field_settings_form($field, $instance, $has_data) {
-  
-	 	$settings = $field['settings'];
+  $settings = $field['settings'];
 
-      global $_trackfield_stats_presets;
-      global $_trackfield_stats_op_types;
-      global $_trackfield_norm_types;
-      $presets = array('' => '<none>');
-      foreach ($_trackfield_stats_presets as $key => $value) {
-        $presets[$key] = t($value['label']);
-      }
-        
-      $form = array(
-        'reference_field_name' => array(
-          '#type' => 'textfield',
-          '#rows' => 1,
-          '#title' => t('Reference Field Name'),
-          '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
-          '#required' => true,
-        ),
-        'stat_preset' => array(
-          '#type' => 'select',
-          '#title' => t('Preset Statistic'),
-          '#default_value' => isset($settings['stat_preset']) ? $settings['stat_preset'] : '',
-          '#options' => $presets,
-        ),
-        'stat_op' => array(
-          '#type' => 'select',
-          '#title' => t('Statistic Operation'),
-          '#default_value' => isset($settings['stat_op']) ? $settings['stat_op'] : '',
-          '#options' => array_merge(array('' => t('<none>')), array_keys($_trackfield_stats_op_types)),
-        ),
-        'stat_args' => array(
-          '#type' => 'textfield',
-          '#title' => t('Operation Args'),
-          '#default_value' => isset($settings['stat_args']) ? $settings['stat_args'] : '',
-        ),
-        'normalise' => array(
-          '#type' => 'select',
-          '#title' => t('Normalise As'),
-          '#default_value' => isset($settings['normalise']) ? $settings['normalise'] : '',
-          '#options' => $_trackfield_norm_types,
-        )
-      );
-      
-      $form['#element_validate'] = array('trackfield_stats_settings_form_validate');
-      
-      return $form;
+  global $_trackfield_stats_presets;
+  global $_trackfield_stats_op_types;
+  global $_trackfield_norm_types;
+  $presets = array('' => '<none>');
+  foreach ($_trackfield_stats_presets as $key => $value) {
+    $presets[$key] = t($value['label']);
   }
-  
+
+  $form = array(
+    'reference_field_name' => array(
+      '#type' => 'textfield',
+      '#rows' => 1,
+      '#title' => t('Reference Field Name'),
+      '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
+      '#required' => true,
+    ),
+    'stat_preset' => array(
+      '#type' => 'select',
+      '#title' => t('Preset Statistic'),
+      '#default_value' => isset($settings['stat_preset']) ? $settings['stat_preset'] : '',
+      '#options' => $presets,
+    ),
+    'stat_op' => array(
+      '#type' => 'select',
+      '#title' => t('Statistic Operation'),
+      '#default_value' => isset($settings['stat_op']) ? $settings['stat_op'] : '',
+      '#options' => array_merge(array('' => t('<none>')), array_keys($_trackfield_stats_op_types)),
+    ),
+    'stat_args' => array(
+      '#type' => 'textfield',
+      '#title' => t('Operation Args'),
+      '#default_value' => isset($settings['stat_args']) ? $settings['stat_args'] : '',
+    ),
+    'normalise' => array(
+      '#type' => 'select',
+      '#title' => t('Normalise As'),
+      '#default_value' => isset($settings['normalise']) ? $settings['normalise'] : '',
+      '#options' => $_trackfield_norm_types,
+    )
+  );
+  $form['#element_validate'] = array('trackfield_stats_settings_form_validate');
+
+  return $form;
+}
+
 function trackfield_stats_settings_form_validate($element, &$form_state) {
-
-	$valid_fields = array();
-	 if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
-        if (array_count_values($valid_fields) == 0) {
-          form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
-        } else {
-          form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
-        }
-      }
-      if ($element['stat_op']['#value'] != '' && $element['stat_preset']['#value'] != '') {
-        form_set_error('stat_preset', t('Preset is not required if giving operation & atgs.'));
-      }
-      if ($element['stat_op']['#value'] == '' && $element['stat_preset']['#value'] == '') {
-        form_set_error('stat_op', t('You must specify operation if not using a preset.'));
-      }
-      if ($element['stat_op']['#value'] != '' && $element['stat_args']['#value'] == '') {
-        form_set_error('stat_op', t('You must specify args with operation.'));
-      }
-      /* TODO: check args number */
+  $valid_fields = array();
+  if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
+    if (array_count_values($valid_fields) == 0) {
+      form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
+    } else {
+      form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
     }
+  }
+  if ($element['stat_op']['#value'] != '' && $element['stat_preset']['#value'] != '') {
+    form_set_error('stat_preset', t('Preset is not required if giving operation & atgs.'));
+  }
+  if ($element['stat_op']['#value'] == '' && $element['stat_preset']['#value'] == '') {
+    form_set_error('stat_op', t('You must specify operation if not using a preset.'));
+  }
+  if ($element['stat_op']['#value'] != '' && $element['stat_args']['#value'] == '') {
+    form_set_error('stat_op', t('You must specify args with operation.'));
+  }
 
-
+  // @todo Check args number.
+}
 
 /***********************************************************************
  *  Field Type API: Formatter
@@ -478,77 +455,94 @@ function trackfield_stats_settings_form_validate($element, &$form_state) {
  * Implements hook_field_formatter_info().
  */
 function trackfield_stats_field_formatter_info() {
-global $_trackfield_norm_types;
-
+  global $_trackfield_norm_types;
   $formatters = array(
-    'trackfield_stats_default' => array('label' => t('Default'), 'field types' => array('trackstat')),
-    'trackfield_stats_metric' => array('label' => t('Metric - Auto'), 'field types' => array('trackstat')),
-    'trackfield_stats_m' => array('label' => t('9999m'), 'field types' => array('trackstat')),
-    'trackfield_stats_km' => array('label' => t('9.99Km'), 'field types' => array('trackstat')),
-    'trackfield_stats_pct' => array('label' => t('9.9%'), 'field types' => array('trackstat')),
-    'trackfield_stats_hh:mm:ss' => array('label' => t('hh:mm:ss'), 'field types' => array('trackstat')),
-    'trackfield_stats_99h99m99s' => array('label' => t('99h99m99s'), 'field types' => array('trackstat')),
+    'trackfield_stats_default' => array(
+      'label' => t('Default'),
+      'field types' => array('trackstat'),
+    ),
+    'trackfield_stats_metric' => array(
+      'label' => t('Metric - Auto'),
+      'field types' => array('trackstat'),
+    ),
+    'trackfield_stats_m' => array(
+      'label' => t('9999m'),
+      'field types' => array('trackstat'),
+    ),
+    'trackfield_stats_km' => array(
+      'label' => t('9.99Km'),
+      'field types' => array('trackstat'),
+    ),
+    'trackfield_stats_pct' => array(
+      'label' => t('9.9%'),
+      'field types' => array('trackstat'),
+    ),
+    'trackfield_stats_hh:mm:ss' => array(
+      'label' => t('hh:mm:ss'),
+      'field types' => array('trackstat'),
+    ),
+    'trackfield_stats_99h99m99s' => array(
+      'label' => t('99h99m99s'),
+      'field types' => array('trackstat'),
+    ),
   );
-  return $formatters;  
-
+  return $formatters;
 }
 
 /**
  * Implements hook_field_formatter_view().
  */
 function trackfield_stats_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
- $element = array();  
-  
+  $element = array();
+
   foreach($items as $delta => $item) {
-  $value = isset($item['value']) ? check_plain($item['value']) : NULL;
-  switch($display['type']) {
-  	  
-    case 'trackfield_stats_metric':
-    if ($value >= TRACKFIELD_METRIC_M_MAX) {
-      $element[$delta]['#markup'] = sprintf("%0.2fKm", $value / 1000);
-      return $element;
+    $value = isset($item['value']) ? check_plain($item['value']) : NULL;
+    switch($display['type']) {
+      case 'trackfield_stats_metric':
+        if ($value >= TRACKFIELD_METRIC_M_MAX) {
+          $element[$delta]['#markup'] = sprintf("%0.2fKm", $value / 1000);
+          return $element;
+        }
+        $element[$delta]['#markup'] = sprintf("%dm", $value);
+        return $element;
+
+      case 'trackfield_stats_m':
+        $element[$delta]['#markup'] = sprintf("%dm", $value);
+        return $element;
+
+      case 'trackfield_stats_km':
+        $element[$delta]['#markup'] = sprintf("%0.2fKm", $value / 1000);
+        return $element;
+
+      case 'trackfield_stats_pct':
+        $element[$delta]['#markup'] = sprintf("%0.1f%%", $value);
+        return $element;
+
+      case 'trackfield_stats_hh:mm:ss':
+        if ($value > 0) {
+          $element[$delta]['#markup'] = _trackfield_stats_secs2text($value);
+          return $element;
+        } else {
+          $element[$delta]['#markup'] = '';
+          return $element;
+        }
+
+      case 'trackfield_stats_99h99m99s':
+        if ($value > 0) {
+          $element[$delta]['#markup'] = sprintf("%02dh%02dm%02ds", $value / 3600, ($value % 3600) / 60, $value % 60);
+          return $element;
+        } else {
+          $element[$delta]['#markup'] = '';
+          return $element;
+        }
+
+      case 'trackfield_stats_default':
+      default:
+        $element[$delta]['#markup'] = $value;
+       return $element;
     }
-    $element[$delta]['#markup'] = sprintf("%dm", $value);
-    return $element;
-
-    case 'trackfield_stats_m':
-    $element[$delta]['#markup'] = sprintf("%dm", $value);
-    return $element;
-
-    case 'trackfield_stats_km':
-    $element[$delta]['#markup'] = sprintf("%0.2fKm", $value / 1000);
-    return $element;
-
-    case 'trackfield_stats_pct':
-    $element[$delta]['#markup'] = sprintf("%0.1f%%", $value);
-    return $element;
-
-    case 'trackfield_stats_hh:mm:ss':
-    if ($value > 0) {
-      $element[$delta]['#markup'] = _trackfield_stats_secs2text($value);
-      return $element;
-    } else {
-      $element[$delta]['#markup'] = '';
-      return $element;
-    }
-
-    case 'trackfield_stats_99h99m99s':
-    if ($value > 0) {
-      $element[$delta]['#markup'] = sprintf("%02dh%02dm%02ds", $value / 3600, ($value % 3600) / 60, $value % 60);
-      return $element;
-    } else {
-      $element[$delta]['#markup'] = '';
-      return $element;
-    }
-
-    case 'trackfield_stats_default':
-    default:
-    $element[$delta]['#markup'] = $value;
-    return $element;
   }
-  }
-  }
-
+}
 
 /**************************************************************************
  * Field Type API: Widget
@@ -565,65 +559,44 @@ function trackfield_stats_field_widget_info() {
     'trackfield_stat_text' => array(
       'label' => t('Text Field'),
       'field types' => array('trackstat'),
-    ),	
+    ),
   );
-}
-
-/**
- * Implements hook_field_widget_settings_form().
- */
-function trackfield_stats_field_widget_settings_form($field, $instance) {
-}
-
-/*
- * Function to determine if given field should be formatted as time.
- */
-
-function _trackfield_stats_is_time($field) {
-  return ($field['settings']['stat_preset'] == 'time');
 }
 
 /**
  * Implements hook_field_widget_form().
  */
- 
 function trackfield_stats_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
   global $_trackfield_stats_presets;
-	$default_value = isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL; 
-  
-  /*
-   * Only show user stats they have previously entered (manual ones).
-   * Otherwise calculated stats will not be refresed if the source track changes.
-   */
+  $default_value = isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL;
+
+  // Only show user stats they have previously entered (manual ones).
+  // Otherwise calculated stats will not be refresed if the source track changes.
   switch ($instance['widget']['type']) {
-
     case 'trackfield_stat_text':
-  
-  if (isset($items[$delta])) { 
-  if (array_key_exists('is_manual', $items[$delta])) {
-  if ($items[$delta]['is_manual'] == 1) {
-    if (isset($items[$delta]['value'])) {
-      $default_value = $items[$delta]['value'];
-      if (_trackfield_stats_is_time($field)) {
-        $default_value = _trackfield_stats_secs2text($default_value);
+      if (isset($items[$delta])) {
+        if (array_key_exists('is_manual', $items[$delta])) {
+          if ($items[$delta]['is_manual'] == 1) {
+            if (isset($items[$delta]['value'])) {
+              $default_value = $items[$delta]['value'];
+              if (_trackfield_stats_is_time($field)) {
+                $default_value = _trackfield_stats_secs2text($default_value);
+              }
+            }
+          } else {
+            // Blank out stat to allow re-calc if necessary.
+            $default_value = NULL;
+          }
+        };
       }
-    }
-    } else {
-      /* Blank out stat to allow re-calc if necessary */
-      $default_value = NULL;
-  }
-  };
-  }
 
-  $element['value'] = array(
-    '#type' => 'textfield',
-	 '#title' => t($_trackfield_stats_presets[$field['settings']['stat_preset']]['label']),
-    '#default_value' => $default_value,
-    );
-    
-  $element['is_manual'] = array();
-  
-  break; 
+      $element['value'] = array(
+        '#type' => 'textfield',
+        '#title' => t($_trackfield_stats_presets[$field['settings']['stat_preset']]['label']),
+        '#default_value' => $default_value,
+      );
+      $element['is_manual'] = array();
+      break; 
   }
   /*if (!empty($field['text_processing'])) {
     $filter_key = $element['#columns'][1];
@@ -637,22 +610,13 @@ function trackfield_stats_field_widget_form(&$form, &$form_state, $field, $insta
     '#type' => 'value',
     '#value' => implode('][', array_merge($element['#parents'], array($field_key))),
   );*/
-  
- 
 
   return $element;
-
 }
 
-/**
- * Implements hook_field_widget_error().
- *//*
-function trackfield_field_widget_error($element, $error, $form, &$form_state) {
-  foreach($error as $error) {
-    form_error($element, $error['message']);
-  }
-}*/
-
+/*
+ * Internal Track Stats functions.
+ */
 function _trackfield_stats_secs2text($secs) {
   return sprintf("%02d:%02d:%02d", $secs / 3600, ($secs % 3600) / 60, $secs % 60);
 }
@@ -719,11 +683,17 @@ function _trackfield_stats_reverse_op(&$op, &$norm_factor) {
 /*
  * Function to determine if the input string is a time.
  */
-
 function _trackfield_stats_txt2secs($time) {
   if (is_numeric($time)) { return $time; }
   if (preg_match_all('/([0-9]+):([0-9][0-9]):([0-9][0-9])/', $time, $parts, PREG_SET_ORDER) == 1) {
     return $parts[0][1] * 3600 + $parts[0][2] * 60 + $parts[0][3]; 
   }
   return 0;
+}
+
+/*
+ * Function to determine if we are calculating a time statistic.
+ */
+function _trackfield_stats_is_time($field) {
+  return ($field['settings']['stat_preset'] == 'time');
 }

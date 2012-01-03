@@ -1,138 +1,140 @@
 <?php
+/**
+ * @file
+ * Uses a third-party API to missing altitude data for a track.
+ *
+ * If altitude data is not present in a dataset or the amout falls below a
+ * certain threshold then altitude data is fetched from an external source and
+ * and added to the dataset. Currently using Google.
+ */
+
 DEFINE('MAX_GOOGLE_ELEVATION_API_URL_LENGTH', 1024);
 DEFINE('MAX_GOOGLE_ELEVATION_API_POINT_COUNT', 256);
 
+/*
+ * Implements hook_trackfield_postprocess()
+ */
 function trackfield_fetch_altitude_trackfield_postprocess($item, $node, &$itemdata) {
   $itemdatasets = &$itemdata['datasets'];
 
   if (!array_key_exists('altitude', $itemdatasets) || !is_array($itemdatasets['altitude'])) {
-		/*
-		 * If there's no latitude/longitude we can't do anything.
-		 */
-		if (!array_key_exists('latitude', $itemdatasets) || !array_key_exists('longitude', $itemdatasets)) { return; }
+    // If there's no latitude/longitude we can't do anything.
+    if (!array_key_exists('latitude', $itemdatasets) || !array_key_exists('longitude', $itemdatasets)) { return; }
 
-    /*
-     * There is lat/long data but no elevation - process
-     */
-
+    // There is lat/long data but no elevation - process.
     _trackfield_fetch_altitude_process($itemdatasets, 'no altitude present in submitted data');
   } else {
-    /*
-     * Altitude exists, but go fetch it anyway if:
-     * - More than threshold percentage is zero
-     * - Contiguous threshold percentage or more has the same value (happens when points are edited)
-     */
+    // Altitude exists, but go fetch it anyway if:
+    // - More than threshold percentage is zero
+    // - Contiguous threshold percentage or more has the same value (happens when points are edited).
     $number_zero = 0;
     $count = count($itemdatasets['altitude']);
     $max_same = 0;
     $same = 0;
     $last_alt = -9999;
     for ($lp = 0; $lp < $count; $lp++) {
-    	if ($itemdatasets['altitude'][$lp] == 0) { $number_zero++; }
-    	if ($last_alt == $itemdatasets['altitude'][$lp]) {
-    	  $same++;
-    	  if ($same > $max_same) { $max_same = $same; }
-    	} else {
-    	  $same = 0;
-    	}
-    	$last_alt = $itemdatasets['altitude'][$lp];
+      if ($itemdatasets['altitude'][$lp] == 0) {
+        $number_zero++;
+      }
+      if ($last_alt == $itemdatasets['altitude'][$lp]) {
+        $same++;
+        if ($same > $max_same) { $max_same = $same; }
+      } else {
+        $same = 0;
+      }
+      $last_alt = $itemdatasets['altitude'][$lp];
     }
-    /* TODO: make 10% a variable */
+    // @todo Make 10% a variable.
     if ($number_zero > $count/10) {
-	    _trackfield_fetch_altitude_process($itemdatasets, '10% or more of given altitude data was zero');
+      _trackfield_fetch_altitude_process($itemdatasets, '10% or more of given altitude data was zero');
     } else if ($max_same > $count / 10) {
-	    _trackfield_fetch_altitude_process($itemdatasets, 'contiguous section of 10% or more of given altitude data was identical');
+      _trackfield_fetch_altitude_process($itemdatasets, 'contiguous section of 10% or more of given altitude data was identical');
     }
   }
 }
 
 function _trackfield_fetch_altitude_process(&$itemdatasets, $reason) {
-	/*
-	 * It might be that this data has already been fetched as part of a preview,
-	 * or re-edit.
-	 *
-	 * To save hitting the webservice once more, see if we cached a prior retrieval.
-	 *
-	 * Use MD5 of lat/lon strings as a key.
-	 */
-
+  // It might be that this data has already been fetched as part of a preview,
+  // or re-edit.
+  //
+  // To save hitting the webservice once more, see if we cached a prior retrieval.
+  //
+  // Use MD5 of lat/lon strings as a key.
   $count = count($itemdatasets['latitude']);
-	$cid = 'trackfield_fetch_altitide:result:' . md5(join(',', array_merge($itemdatasets['latitude'], $itemdatasets['longitude'])));
-	$cache_data = cache_get($cid);
-	if ($cache_data) $altitude_out = $cache_data->data;
-	if (!isset($altitude_out ) || !is_array($altitude_out) || count($altitude_out) != $count) {
-	  /*
-	   * Fetch altitude data from Google API:
-	   *
-	   * http://code.google.com/apis/maps/documentation/elevation/
-	   *
-	   * Usage limts us to:
-	   * - 2048 character URLs
-	   * - 512 point lines
-	   *
-	   * See above defines with half the limit - using actual limits below,
-	   * or even close causes an error from the Google API).
-	   */
+  $cid = 'trackfield_fetch_altitide:result:' . md5(join(',', array_merge($itemdatasets['latitude'], $itemdatasets['longitude'])));
+  $cache_data = cache_get($cid);
+  if ($cache_data) {
+    $altitude_out = $cache_data->data;
+  }
+  if (!isset($altitude_out ) || !is_array($altitude_out) || count($altitude_out) != $count) {
+    // Fetch altitude data from Google API:
+    //
+    // http://code.google.com/apis/maps/documentation/elevation/
+    //
+    // Usage limts us to:
+    // - 2048 character URLs
+    // - 512 point lines
+    //
+    // See above defines with half the limit - using actual limits below,
+    // or even close causes an error from the Google API).
 
-	  $altitude_out = array ();
-	  $base_url_length = strlen(_trackfield_fetch_altitude_url('', MAX_GOOGLE_ELEVATION_API_POINT_COUNT));
+    $altitude_out = array ();
+    $base_url_length = strlen(_trackfield_fetch_altitude_url('', MAX_GOOGLE_ELEVATION_API_POINT_COUNT));
 
-	  $lp = 0;
-	  while ($lp < $count) {
-	    /* Encode points into URL */
-	    $encoded_points = '';
-	    $encoded_points_count = 0;
-	    $plat = 0;
-	    $plng = 0;
-	    do {
-	      $late5 = floor($itemdatasets['latitude'][$lp] * 1e5);
-	      $lnge5 = floor($itemdatasets['longitude'][$lp] * 1e5);
-	      $dlat = $late5 - $plat;
-	      $dlng = $lnge5 - $plng;
-	      $plat = $late5;
-	      $plng = $lnge5;
-	      $encoded_points .= _trackfield_fetch_altitude_encodenum($dlat) . _trackfield_fetch_altitude_encodenum($dlng);
+    $lp = 0;
+    while ($lp < $count) {
+      // Encode points into URL.
+      $encoded_points = '';
+      $encoded_points_count = 0;
+      $plat = 0;
+      $plng = 0;
+      do {
+        $late5 = floor($itemdatasets['latitude'][$lp] * 1e5);
+        $lnge5 = floor($itemdatasets['longitude'][$lp] * 1e5);
+        $dlat = $late5 - $plat;
+        $dlng = $lnge5 - $plng;
+        $plat = $late5;
+        $plng = $lnge5;
+        $encoded_points .= _trackfield_fetch_altitude_encodenum($dlat) . _trackfield_fetch_altitude_encodenum($dlng);
 
-	      $encoded_points_count++;
-	      $lp++;
-	    } while ($lp < $count && strlen($encoded_points) + $base_url_length < MAX_GOOGLE_ELEVATION_API_URL_LENGTH && $encoded_points_count < MAX_GOOGLE_ELEVATION_API_POINT_COUNT);
+        $encoded_points_count++;
+        $lp++;
+      } while ($lp < $count && strlen($encoded_points) + $base_url_length < MAX_GOOGLE_ELEVATION_API_URL_LENGTH && $encoded_points_count < MAX_GOOGLE_ELEVATION_API_POINT_COUNT);
 
-	    /* Fetch document and parse */
-	    $url = _trackfield_fetch_altitude_url($encoded_points, $encoded_points_count);
-	    $result = drupal_http_request($url);
-	    $doc = new DomDocument;
-	    if ($doc->loadXML($result->data)) {
-	      $pointname = 'result';
-	      $result_list = $doc->getElementsByTagName($pointname);
-	      if ($result_list->length == $encoded_points_count) {
-	        $point = $result_list->item(0);
-	        while ($point) {
-	          $altitude_out[] = trim($point->getElementsByTagName('elevation')->item(0)->nodeValue);
+      // Fetch document and parse.
+      $url = _trackfield_fetch_altitude_url($encoded_points, $encoded_points_count);
+      $result = drupal_http_request($url);
+      $doc = new DomDocument;
+      if ($doc->loadXML($result->data)) {
+        $pointname = 'result';
+        $result_list = $doc->getElementsByTagName($pointname);
+        if ($result_list->length == $encoded_points_count) {
+          $point = $result_list->item(0);
+          while ($point) {
+            $altitude_out[] = trim($point->getElementsByTagName('elevation')->item(0)->nodeValue);
 
-	          /* Move to next point of interest in the list */
-	          do {
-	            $point = $point->nextSibling;
-	          } while ($point && $point->nodeName != $pointname);
-	        }
-	      }
-	    } else {
-	      drupal_set_message(t('Failed to parse result from elevation request.'), 'error', false);
-	      /* Give up */
-	      break;
-	    }
-	  }
-	}
-  /* Check all was well */
+            // Move to next point of interest in the list */
+            do {
+              $point = $point->nextSibling;
+            } while ($point && $point->nodeName != $pointname);
+          }
+        }
+      } else {
+        drupal_set_message(t('Failed to parse result from elevation request.'), 'error', false);
+        // Give up.
+        break;
+      }
+    }
+  }
+  // Check all was well.
   if (count($altitude_out) == $count) {
-  	$service = '<a href="http://code.google.com/apis/maps/documentation/elevation/">Google Elevation API</a>';
+    $service = '<a href="http://code.google.com/apis/maps/documentation/elevation/">Google Elevation API</a>';
     drupal_set_message(sprintf('Altitude data was successfully fetched from %s (%s).', $service, $reason), 'status');
     $itemdatasets['altitude'] = $altitude_out;
-    /*
-     * Store in cache for 48 hours. Doesn't matter if this came from cache,
-     * the expiry timer will get pushed out.
-     *
-     * TODO: make this variable.
-     */
+    // Store in cache for 48 hours. Doesn't matter if this came from cache,
+    // the expiry timer will get pushed out.
+    //
+    // @todo Maake this variable.
     cache_set($cid, $altitude_out, 'cache', time() + 48 * 60 * 60);
   } else {
     drupal_set_message(sprintf('Error in altitude data (%d of %d fetched).', count($itemdatasets['altitude']), $count), 'error');
@@ -144,7 +146,7 @@ function _trackfield_fetch_altitude_url($encoded_points, $count) {
 }
 
 function _trackfield_fetch_altitude_encodenum($num) {
-  $encodeString = '';  
+  $encodeString = '';
   $sgn_num = $num << 1;
   if ($num < 0) {
     $sgn_num = ~($sgn_num);
@@ -158,4 +160,3 @@ function _trackfield_fetch_altitude_encodenum($num) {
   $encodeString .= chr($finalValue);
   return $encodeString;
 }
-?>

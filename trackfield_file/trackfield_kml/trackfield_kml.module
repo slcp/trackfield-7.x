@@ -1,0 +1,85 @@
+<?php
+/**
+ * @file
+ * Parses KML XML formats for track data.
+ */
+
+/*
+ * Types of input we understand.
+ */
+DEFINE('DATASET_KML', 'kml');
+
+/*
+ * Implements hook_trackfield_valuetypes().
+ */
+function trackfield_kml_trackfield_valuetypes() {
+  return array(
+    DATASET_KML => t('KML'),
+  );
+}
+
+function _trackfield_kml_setcsv(&$item) {
+  $new_value = FALSE;
+  $doc = new DomDocument;
+  // @todo Check for KML compressed data (zip file containing doc.kml).
+  if ($doc->loadXML($item['value'])) {
+    // Look for 'old' LineString elements.
+    watchdog('trackfield_kml', 'Looking LineString');
+    $ls = $doc->getElementsByTagName('LineString');
+    if ($ls->length) {
+      $co = $ls->item(0)->getElementsByTagName('coordinates');
+      if ($co->length) {
+        $new_value = trim($co->item(0)->nodeValue);
+        $item['valuetype'] = DATASET_LONLATALT;
+      }
+    } else {
+      // Look for gx:Track elements.
+      $gx = $doc->getElementsByTagName('Track');
+      if ($gx->length) {
+        $pointname = 'coord';
+        $point_list = $gx->item(0)->getElementsByTagName($pointname);
+        // Because we will traverse directly, add NS.
+        $pointname = 'gx:' . $pointname;
+        $point = $point_list->item(0);
+        while ($point) {
+          list($lon, $lat, $alt) = split(' ', trim($point->nodeValue));
+          if (isset($csv)) { $csv .= ' '; }
+          $csv .= "$lon,$lat,$alt";
+
+          // Move to next point of interest in the list.
+          do {
+            $point = $point->nextSibling;
+          } while ($point && $point->nodeName != $pointname);
+        }
+        $new_value = $csv;
+        $item['valuetype'] = DATASET_LONLATALT;
+      }
+    }
+  }
+  $item['value'] = $new_value;
+}
+
+/*
+ * Implements hook_trackfield_validate().
+ */
+function trackfield_kml_trackfield_validate($item, $node) {
+  $valuetype = $item['valuetype'];
+  if (!array_key_exists($valuetype, trackfield_kml_trackfield_valuetypes())) { return; }
+
+  _trackfield_kml_setcsv($item);
+  if (!$item['value']) {
+    return array('trackfield_kml_invalid_data' => t('Invalid KML or no paths found in KML.'));
+  }
+  return trackfield_csv_trackfield_validate($item, $node);
+}
+
+/*
+ * Implements hook_trackfield_submit().
+ */
+function trackfield_kml_trackfield_submit($item, $node) {
+  $valuetype = $item['valuetype'];
+  if (!array_key_exists($valuetype, trackfield_kml_trackfield_valuetypes())) { return; }
+
+  _trackfield_kml_setcsv($item);
+  return trackfield_csv_trackfield_submit($item, $node);
+}

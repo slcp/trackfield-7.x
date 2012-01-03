@@ -1,0 +1,6 @@
+name = Track KML
+description = "Allows trackfield to interprit data in KML format."
+core = 7.x
+dependencies[] = trackfield
+dependencies[] = trackfield_csv
+package = Trackfield

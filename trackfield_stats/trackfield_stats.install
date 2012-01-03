@@ -1,5 +1,10 @@
 <?php
 /**
+ * @file
+ * Install, update and uninstall functions for the Trackfield Stats module.
+ */
+
+/**
  * Implements hook_field_schema().
  *
  * This defines the actual database schema of the field, using the format
@@ -9,12 +14,20 @@
  * @see hook_field_schema()
  * @link schemaapi Schema API @endlink
  */
- 
 function trackfield_stats_field_schema($field) {
   $columns = array(
-  	 // Value is the raw input
-    'value' => array('type' => 'text', 'size' => 'big', 'sortable' => FALSE),
-    'is_manual' => array('type' => 'int', 'size' => 'tiny', 'default' => 0, 'sortable' => FALSE),
+    // Value is the raw input.
+    'value' => array(
+      'type' => 'text',
+      'size' => 'big',
+      'sortable' => FALSE,
+    ),
+    'is_manual' => array(
+      'type' => 'int',
+      'size' => 'tiny',
+      'default' => 0,
+      'sortable' => FALSE,
+    ),
   );
   return array(
     'columns' => $columns,

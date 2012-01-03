@@ -4,7 +4,3 @@ package = Trackfield
 core = 7.x
 dependencies[] = trackfield
 dependencies[] = trackfield_csv
-dependencies[] = trackfield_file
-
-
-

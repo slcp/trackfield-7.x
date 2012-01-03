@@ -1,13 +1,13 @@
 <?php
-
-/***************************************************************
- * Field Type API hooks
- ***************************************************************/
+/**
+ * @file
+ * Trackfield WKT outputs a Track as WKT Linestring.
+ *
+ * This field can be used to output tracks using the Views and Openlayers.
+ */
 
 /**
  * Implements hook_field_info().
- *
- * Provides the description of the field.
  */
 function trackfield_wkt_field_info() {
   return array(
@@ -21,52 +21,39 @@ function trackfield_wkt_field_info() {
 }
 
 /**
- * Implements hook_field_validate().
- */
-function trackfield_wkt_field_validate ($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
-
-}
-
-/**
  * Implements hook_field_presave().
  */
 function trackfield_wkt_field_presave ($entity_type, $entity, $field, $instance, $langcode, &$items, &$errors) {
-	/*
-     * Calculate stat if no input was given and that is possible.
-     */ 
-	 $settings = $field['settings'];
-    $field_name = $settings['reference_field_name'];
-    $fset = $entity->{$field_name}[$langcode];
-    
-    foreach ($items as $delta => $item) {
-    	
-     if ($fset[$delta]['value'] != '') {
+  $settings = $field['settings'];
+  $field_name = $settings['reference_field_name'];
+  $fset = $entity->{$field_name}[$langcode];
 
-        /* If we have to normalise  - set norm_factor */
-        $norm_factor = 1;
+  foreach ($items as $delta => $item) {
+    if ($fset[$delta]['value'] != '') {
+      // If we have to normalise  - set norm_factor.
+      $norm_factor = 1;
         /*$fset_attr = unserialize($fset[$delta]['attributes']);
         if ($settings['normalise'] == TRACKFIELD_NORM_REVERSE) {
           _trackfield_wkt_reverse_op($op, $norm_factor);
         }*/
-        
-        $lat = $fset[$delta]['latitude'];
-        $lon = $fset[$delta]['longitude'];
-        
-		  $i = 0;
-		  $output = 'LINESTRING (';
-		  $limit = count($lat) - 1; 
-        while($i <= $limit) {
-			  $output .= $lon[$i];
-			  $output .= ' ' . $lat[$i];
-			  if ($i != $limit) $output .= ', ';
-			  $i++;
-		  }
-		  
-		  $output .= ')';
-        $items[$delta]['value'] = $output;
+
+      $lat = $fset[$delta]['latitude'];
+      $lon = $fset[$delta]['longitude'];
+
+      $i = 0;
+      $output = 'LINESTRING (';
+      $limit = count($lat) - 1;
+      while($i <= $limit) {
+        $output .= $lon[$i];
+        $output .= ' ' . $lat[$i];
+        if ($i != $limit) { $output .= ', ' };
+        $i++;
       }
+      $output .= ')';
+      $items[$delta]['value'] = $output;
     }
   }
+}
 
 /**
  * Implements hook_field_is_empty().
@@ -79,81 +66,62 @@ function trackfield_wkt_field_is_empty($item, $field) {
  * Implementation of hook_field_settings_form().
  */
 function trackfield_wkt_field_settings_form($field, $instance, $has_data) {
-  
-	 	$settings = $field['settings'];
+  $settings = $field['settings'];
 
-      $form = array(
-        'reference_field_name' => array(
-          '#type' => 'textfield',
-          '#rows' => 1,
-          '#title' => t('Reference Field Name'),
-          '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
-          '#required' => true,
-        ),
-      );
-      
-      $form['#element_validate'] = array('trackfield_wkt_settings_form_validate');
-      
-      return $form;
-  }
-  
+  $form = array(
+    'reference_field_name' => array(
+      '#type' => 'textfield',
+      '#rows' => 1,
+      '#title' => t('Reference Field Name'),
+      '#default_value' => isset($settings['reference_field_name']) ? $settings['reference_field_name'] : '',
+      '#required' => true,
+    ),
+  );
+  $form['#element_validate'] = array('trackfield_wkt_settings_form_validate');
+
+  return $form;
+}
+
 function trackfield_wkt_settings_form_validate($element, &$form_state) {
-
-	$valid_fields = array();
-	 if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
-        if (array_count_values($valid_fields) == 0) {
-          form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
-        } else {
-          form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
-        }
-      }
+  $valid_fields = array();
+  if (!in_array($element['reference_field_name']['#value'], $valid_fields = _trackfield_fields())) {
+    if (array_count_values($valid_fields) == 0) {
+      form_set_error('reference_field_name', t('You must specify the reference field of type track, but appear not to have any defined!'));
+    } else {
+      form_set_error('reference_field_name', t('You must specify the reference field of type track. Valid fields in this system: %fields', array('%fields' => join(', ', $valid_fields))));
     }
-
-/***********************************************************************
- *  Field Type API: Formatter
- *
- *  These are the api hooks that present formatted (themed) output to the
- *  user.
- **********************************************************************/
+  }
+}
 
 /**
  * Implements hook_field_formatter_info().
  */
 function trackfield_wkt_field_formatter_info() {
-
   $formatters = array(
-    'trackfield_wkt_linestring' => array('label' => t('Linestring'), 'field types' => array('trackwkt')),
+    'trackfield_wkt_linestring' => array(
+      'label' => t('Linestring'),
+      'field types' => array('trackwkt'),
+    ),
   );
-  return $formatters;  
-
+  return $formatters;
 }
 
 /**
  * Implements hook_field_formatter_view().
  */
 function trackfield_wkt_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
- $element = array();  
-  
+  $element = array();
   foreach($items as $delta => $item) {
-  $value = isset($item['value']) ? check_plain($item['value']) : NULL;
-  switch($display['type']) {
-  	  
-    case 'trackfield_wkt_linestring':
-    default:
-    $element[$delta]['#markup'] = $value;
-    break;
+    $value = isset($item['value']) ? check_plain($item['value']) : NULL;
+    switch($display['type']) {
+      case 'trackfield_wkt_linestring':
+      default:
+        $element[$delta]['#markup'] = $value;
+        break;
     }
     return $element;
   }
-  }
-
-
-/**************************************************************************
- * Field Type API: Widget
- *
- * The widget is the form element used to receive input from the user
- * when the field is being populated.
- **************************************************************************/
+}
 
 /**
  * Implements hook_field_widget_info().
@@ -163,49 +131,27 @@ function trackfield_wkt_field_widget_info() {
     'trackfield_wkt_text' => array(
       'label' => t('Default'),
       'field types' => array('trackwkt'),
-    ),	
+    ),
   );
-}
-
-/**
- * Implements hook_field_widget_settings_form().
- */
-function trackfield_wkt_field_widget_settings_form($field, $instance) {
 }
 
 /**
  * Implements hook_field_widget_form().
  */
- 
 function trackfield_wkt_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-  $default_value = isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL; 
-  
-  /*
-   * Only show user stats they have previously entered (manual ones).
-   * Otherwise calculated stats will not be refresed if the source track changes.
-   */
+  $default_value = isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL;
+
+  // Only show user stats they have previously entered (manual ones).
+  // Otherwise calculated stats will not be refresed if the source track changes.
   switch ($instance['widget']['type']) {
-
     case 'trackfield_wkt_text':
- 
-  $element['value'] = array(
-    '#type' => 'textfield',
-	 '#title' => t('WKT'),
-    '#maxlength' => 1000000,
-    '#default_value' => $default_value,
-    );
-  break; 
-  } 
-
-  return $element;
-
-}
-
-/**
- * Implements hook_field_widget_error().
- *//*
-function trackfield_field_widget_error($element, $error, $form, &$form_state) {
-  foreach($error as $error) {
-    form_error($element, $error['message']);
+      $element['value'] = array(
+        '#type' => 'textfield',
+        '#title' => t('WKT'),
+        '#maxlength' => 1000000,
+        '#default_value' => $default_value,
+      );
+      break;
   }
-}*/
+  return $element;
+}

@@ -1,11 +1,17 @@
 <?php
+/**
+ * @file
+ * Parses TCX XML formats for track data.
+ */
 
 /*
  * Types of input we understand.
  */
-
 DEFINE('DATASET_TCX', 'tcx');
 
+/*
+ * Implements hook_trackfield_valuetypes().
+ */
 function trackfield_tcx_trackfield_valuetypes() {
   return array(
     DATASET_TCX => t('TCX'),
@@ -31,19 +37,19 @@ function _trackfield_tcx_setcsv(&$item) {
       while ($point) {
         $lat = trim($point->getElementsByTagName('LatitudeDegrees')->item(0)->nodeValue);
         $lon = trim($point->getElementsByTagName('LongitudeDegrees')->item(0)->nodeValue);
-        /* Only add point if lat/lon given */
+        // Only add point if lat/lon given.
         if (is_numeric($lat) && is_numeric($lon)) {
           $alt = trim($point->getElementsByTagName('AltitudeMeters')->item(0)->nodeValue);
           $tmp = trim($point->getElementsByTagName('HeartRateBpm'));
           if ($tmp->length) {
             $val = trim($tmp->item(0)->getElementsByTagName('Value')->item(0)->nodeValue);
-            /* 255 == invalid value - just use the last good one for now. */
+            // 255 == invalid value - just use the last good one for now.
             if ($val != 255) {
               $hrt = $val;
             }
           }
-          
-          /* Convert time into number of seconds since start */
+
+          // Convert time into number of seconds since start.
           $tim = trim($point->getElementsByTagName('Time')->item(0)->nodeValue);
           if ($tim) {
             $tim = strtotime($tim);
@@ -55,7 +61,7 @@ function _trackfield_tcx_setcsv(&$item) {
           $csv .= "$lon,$lat,$alt,$tim,$hrt";
         }
 
-        /* Move to next point of interest in the list */
+        // Move to next point of interest in the list.
         do {
           $point = $point->nextSibling;
         } while ($point && $point->nodeName != $pointname);
@@ -70,6 +76,9 @@ function _trackfield_tcx_setcsv(&$item) {
   $item['value'] = &$new_value;
 }
 
+/*
+ * Implements hook_trackfield_validate().
+ */
 function trackfield_tcx_trackfield_validate($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_tcx_trackfield_valuetypes())) { return; }
@@ -81,6 +90,9 @@ function trackfield_tcx_trackfield_validate($item, $node, $delta, $langcode) {
   return trackfield_csv_trackfield_validate($item, $node, $delta, $langcode);
 }
 
+/*
+ * Implements hook_trackfield_submit().
+ */
 function trackfield_tcx_trackfield_submit($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_tcx_trackfield_valuetypes())) { return; }
@@ -88,5 +100,3 @@ function trackfield_tcx_trackfield_submit($item, $node, $delta, $langcode) {
   _trackfield_tcx_setcsv($item);
   return trackfield_csv_trackfield_submit($item, $node, $delta, $langcode);
 }
-
-?>

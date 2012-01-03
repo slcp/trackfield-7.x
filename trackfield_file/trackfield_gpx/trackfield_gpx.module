@@ -1,11 +1,17 @@
 <?php
+/**
+ * @file
+ * Parses GPX XML formats for track data.
+ */
 
 /*
  * Types of input we understand.
  */
-
 DEFINE('DATASET_GPX', 'gpx');
 
+/*
+ * Implements hook_trackfield_valuetypes().
+ */
 function trackfield_gpx_trackfield_valuetypes() {
   return array(
     DATASET_GPX => t('GPX'),
@@ -26,11 +32,11 @@ function _trackfield_gpx_setcsv(&$item) {
         $lat = trim($point->getAttributeNode('lat')->value);
         $lon = trim($point->getAttributeNode('lon')->value);
         $alt = trim($point->getElementsByTagName('ele')->item(0)->nodeValue);
-        
+
         if (isset($csv)) { $csv .= ' '; }
         $csv .= "$lon,$lat,$alt";
-        
-        /* Move to next point of interest in the list */
+
+        // Move to next point of interest in the list.
         do {
           $point = $point->nextSibling;
         } while ($point && $point->nodeName != $pointname);
@@ -42,6 +48,9 @@ function _trackfield_gpx_setcsv(&$item) {
   $item['value'] = $new_value;
 }
 
+/*
+ * Implements hook_trackfield_validate().
+ */
 function trackfield_gpx_trackfield_validate($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_gpx_trackfield_valuetypes())) { return; }
@@ -53,6 +62,9 @@ function trackfield_gpx_trackfield_validate($item, $node, $delta, $langcode) {
   return trackfield_csv_trackfield_validate($item, $node, $delta, $langcode);
 }
 
+/*
+ * Implements hook_trackfield_submit().
+ */
 function trackfield_gpx_trackfield_submit($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_gpx_trackfield_valuetypes())) { return; }
@@ -60,5 +72,3 @@ function trackfield_gpx_trackfield_submit($item, $node, $delta, $langcode) {
   _trackfield_gpx_setcsv($item);
   return trackfield_csv_trackfield_submit($item, $node, $delta, $langcode);
 }
-
-?>

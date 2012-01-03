@@ -59,14 +59,14 @@ function _trackfield_graph_get_graphdata(&$graphargs, $settypes_in = FALSE) {
     // Load the data lists from separate table.
 
     $sql = <<<EOF
-SELECT settype, setdata
-FROM {trackfield_datasets} td
-WHERE td.nid = :nid
-AND td.vid = :vid
-AND td.field_name = :field_name
-AND td.delta = :delta
-AND settype = :settype
-EOF;
+      SELECT settype, setdata
+      FROM {trackfield_datasets} td
+      WHERE td.nid = :nid
+        AND td.vid = :vid
+        AND td.field_name = :field_name
+        AND td.delta = :delta
+        AND settype = :settype
+    EOF;
 
     foreach ($settypes as $settype) {
       $result = db_query($sql, array(':nid' => $node->nid, ':vid' => $node->vid, ':field_name' => $field, ':delta' => $delta, ':settype' => $settype));

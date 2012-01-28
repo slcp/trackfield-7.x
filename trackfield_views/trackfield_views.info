@@ -1,0 +1,7 @@
+name = Trackfield Views
+description = Provides Views integration for Trackfield
+package = Trackfield
+core = 7.x
+files[] = views_handler_field_trackfield_setdata.inc
+
+

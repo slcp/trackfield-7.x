@@ -50,7 +50,7 @@ function _trackfield_file_invoke_handler($hook, $item, $node, $delta, $langcode)
   }
 
   if (module_exists('trackfield_queue') && _trackfield_queue_should_queue(filesize($filepath), $node)) {
-    if ($hook == 'trackfield_validate') (
+    if ($hook == 'trackfield_validate') {
       return FALSE;
     }
     return array('attributes' => array('should_queue' => 1));

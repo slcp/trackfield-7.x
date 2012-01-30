@@ -46,7 +46,7 @@ function trackfield_wkt_field_presave ($entity_type, $entity, $field, $instance,
       while($i <= $limit) {
         $output .= $lon[$i];
         $output .= ' ' . $lat[$i];
-        if ($i != $limit) { $output .= ', ' };
+        if ($i != $limit) { $output .= ', '; }
         $i++;
       }
       $output .= ')';

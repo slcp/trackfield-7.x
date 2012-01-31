@@ -62,7 +62,7 @@ function _trackfield_kml_setcsv(&$item) {
 /*
  * Implements hook_trackfield_validate().
  */
-function trackfield_kml_trackfield_validate($item, $node) {
+function trackfield_kml_trackfield_validate($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_kml_trackfield_valuetypes())) { return; }
 
@@ -70,16 +70,16 @@ function trackfield_kml_trackfield_validate($item, $node) {
   if (!$item['value']) {
     return array('trackfield_kml_invalid_data' => t('Invalid KML or no paths found in KML.'));
   }
-  return trackfield_csv_trackfield_validate($item, $node);
+  return trackfield_csv_trackfield_validate($item, $node, $delta, $langcode);
 }
 
 /*
  * Implements hook_trackfield_submit().
  */
-function trackfield_kml_trackfield_submit($item, $node) {
+function trackfield_kml_trackfield_submit($item, $node, $delta, $langcode) {
   $valuetype = $item['valuetype'];
   if (!array_key_exists($valuetype, trackfield_kml_trackfield_valuetypes())) { return; }
 
   _trackfield_kml_setcsv($item);
-  return trackfield_csv_trackfield_submit($item, $node);
+  return trackfield_csv_trackfield_submit($item, $node, $delta, $langcode);
 }

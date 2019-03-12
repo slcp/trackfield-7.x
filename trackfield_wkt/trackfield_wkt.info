@@ -1,8 +1,0 @@
-name = Track WKT
-description = Output Track Lat/Lon data as WKT Field, this enables you to use your tracks in an Openlayers view.
-package = Trackfield
-core = 7.x
-dependencies[] = trackfield
-
-
-

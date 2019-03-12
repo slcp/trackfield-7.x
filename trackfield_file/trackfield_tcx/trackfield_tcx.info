@@ -1,6 +1,0 @@
-name = Track TCX
-description = "Allows trackfield to interprit data in TCX (Garmin Training Centre) format."
-core = 7.x
-dependencies[] = trackfield
-dependencies[] = trackfield_csv
-package = Trackfield

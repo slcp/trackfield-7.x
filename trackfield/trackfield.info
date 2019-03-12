@@ -2,6 +2,3 @@ name = Trackfield
 description = Defines a field for storing track co-ordinates (distance, lat/lon, altitude, etc).
 package = Trackfield
 core = 7.x
-
-
-

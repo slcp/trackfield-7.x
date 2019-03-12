@@ -1,7 +1,0 @@
-name = Track Fetch Altitude
-description = Enriches trackfield input with altitude data where not provided or partial.
-core = 7.x
-version = "7.x-0.1-dev"
-dependencies[] = trackfield
-package = Trackfield
-

@@ -1,6 +1,0 @@
-name = Track GPX
-description = "Allows trackfield to interprit data in GPX format."
-package = Trackfield
-core = 7.x
-dependencies[] = trackfield
-dependencies[] = trackfield_csv

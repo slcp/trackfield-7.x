@@ -1,10 +1,5 @@
 <?php
 /**
- * @file
- * Install, update and uninstall functions for the Trackfield Map module.
- */
- 
-/**
  * Implements hook_field_schema().
  *
  * This defines the actual database schema of the field, using the format
@@ -14,57 +9,34 @@
  * @see hook_field_schema()
  * @link schemaapi Schema API @endlink
  */
+ 
 function trackfield_map_field_schema($field) {
   $columns = array(
-    'dummy' => array(
-      'type' => 'int',
-      'size' => 'tiny',
-      'unsigned' => TRUE,
-      'default' => 1,
-      'sortable' => FALSE,
-    ),
+    'dummy' => array('type' => 'int', 'size' => 'tiny', 'unsigned' => TRUE, 'default' => 1, 'sortable' => FALSE),
   );
   return array(
     'columns' => $columns,
   );
 }
 
-/*
- * Implements hook_install().
- */
 function trackfield_map_install() {
-  // Save default options in variable as they were previously hard coded. 
-  variable_set('trackfield_map_format_sizes', array(
-    'Thumbnail' => array(
-      'width' => 133,
-      'height' => 100,
-      'type' => 'gmap_static',
-      'gmap_attr' => '|control=None |type=Map',
-    ),
-    'default' => array(
-      'width' => 480,
-      'height' => 360,
-      'type' => 'gmap',
-      'gmap_attr' => '|control=Small |type=Map',
-    ),
-    '640'  => array(
-      'width' => 640,
-      'height' => 480,
-      'type' => 'gmap',
-      'gmap_attr' => '|control=Small |type=Map',
-    ),
-    'Preview' => array(
-      'width' => 800,
-      'height' => 600,
-      'type' => 'gmap',
-      'gmap_attr' => '|control=Small |type=Map',
-    ),
-  ));
-}
 
-/*
- * Implements hook_uninstall().
+  /*
+ * Save default options in variable as they were previously hard coded.
  */
+ 
+  variable_set('trackfield_map_format_sizes', array(
+    'Thumbnail' => array('width' => 133, 'height' => 100, 'type' => 'gmap_static', 'gmap_attr' => '|control=None |type=Map'),
+    'default' => array('width' => 480, 'height' => 360, 'type' => 'gmap', 'gmap_attr' => '|control=Small |type=Map'),
+    '640'  => array('width' => 640, 'height' => 480, 'type' => 'gmap', 'gmap_attr' => '|control=Small |type=Map'),
+    'Preview' => array('width' => 800, 'height' => 600, 'type' => 'gmap', 'gmap_attr' => '|control=Small |type=Map'),
+  ));
+
+  
+  }
+  
 function trackfield_map_uninstall() {
+	  
   variable_del('trackfield_map_format_sizes');
-}
+  
+  }

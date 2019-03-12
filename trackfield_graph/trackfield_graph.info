@@ -1,8 +1,0 @@
-name = Track Graph
-description = Graph data held in Track fields.
-package = Trackfield
-core = 7.x
-dependencies[] = trackfield
-
-
-

@@ -186,7 +186,9 @@ function trackfield_map_field_formatter_view($entity_type, $entity, $field, $ins
     	/*
        * Found the correct size - get lat/lon data and draw map.
        */
-     	/*if (isset($entity->in_preview)) {
+       
+      /* This method does not work in Drupal 7, the datasets are not available in preview. */ 
+     	/*if (isset($entity->op) && $entity->op == 'Preview') {
 				/*
 				 * If this is a preview then the datasets should already be in
 				 * the node. Just use that.
@@ -199,11 +201,16 @@ function trackfield_map_field_formatter_view($entity_type, $entity, $field, $ins
 				 * The datasets will not have automatically been loaded (for performance reasons),
 				 * so load them now.
 				 */
-        $result = db_query("SELECT nid, settype, setdata from {trackfield_datasets} WHERE vid = :vid and field_name = :fd and delta = :delta and settype in ('latitude', 'longitude')", array(':vid' => $entity->vid, ':fd' => $ref_field_name, ':delta' =>$delta));
+        /*$result = db_query("SELECT nid, settype, setdata from {trackfield_datasets} WHERE vid = :vid and field_name = :fd and delta = :delta and settype in ('latitude', 'longitude')", array(':vid' => $entity->vid, ':fd' => $ref_field_name, ':delta' =>$delta));
         foreach ($result as $sd) {
           $item[$sd->settype] = explode(',', $sd->setdata);
-        	}
+        	}*/
         //}
+
+      /* Include my custom functions */
+	   include_once(drupal_get_path('module', 'trackfield') . '/customfunctions.php');
+
+      $item = trackfield_trackdata_load ($entity->nid, $entity->vid, $ref_field_name, $delta, array('latitude','longitude'));
 
       /* Should we be showing a map too? */
       if (isset($item) && array_key_exists('latitude', $item) && array_key_exists('longitude', $item)) {
@@ -253,9 +260,9 @@ function trackfield_map_field_formatter_view($entity_type, $entity, $field, $ins
         }
 
         /* TODO: these should be attributes of formatter */
-        $path_colour = '0000bb';
-        $path_width = 2;
-        $path_opacity = 50;
+        $path_colour = '0000bb'; //$trackfield_map_format_sizes[$formatter]['path_colour']
+        $path_width = 2; //$trackfield_map_format_sizes[$formatter]['path_width']
+        $path_opacity = 50; //$trackfield_map_format_sizes[$formatter]['path_opacity']
 
         if ($trackfield_map_format_sizes[$formatter]['type'] == 'gmap_static') {
           $path = sprintf('&path=rgb:0x%s,weight:%d|%s',
